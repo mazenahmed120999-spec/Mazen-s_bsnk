@@ -1,3 +1,4 @@
+
 // main.js - The full script code (Fixed for Leaderboard Display)
 
 // 🛑 Import Firebase modules and functions 🛑
@@ -114,6 +115,7 @@ let lastSpinTime = 0;
 let lastClaimTime = 0; 
 let playerNetWorth = 0; 
 let playerRank = 'N/A'; 
+let saveInterval; // 🛑 NEW: Variable to hold the save interval
 
 // Bank Elements
 const bankAmountInput = document.getElementById('bankAmount');
@@ -218,8 +220,8 @@ function renderItem(item) {
         });
     }
 
-    // Call save data after rendering
-    saveUserData();
+    // Call save data after rendering - 🛑 NOTE: Removed automatic save here to rely on the 1-second interval
+    // saveUserData(); 
 }
 
 function randInt(min, max) {
@@ -233,7 +235,7 @@ function updatePrices() {
     const change = randInt(range.min, range.max);
     price = Math.max(10, price + change);
     item.dataset.price = Math.round(price);
-    renderItem(item); // Renders price and saves data
+    renderItem(item); // Renders price (which relies on the interval for saving)
   });
 }
 
@@ -714,7 +716,8 @@ async function loadUserData() {
             // First time player - set default player name and save
             playerName = `Player-${currentUserID.substring(0, 5)}`; // Set default name
             console.log("New player! Setting default data.");
-            await saveUserData();
+            // 🛑 IMPORTANT: Save the initial data for new players
+            await saveUserData(); 
         }
 
         // Final setup after loading/setting defaults
@@ -724,9 +727,15 @@ async function loadUserData() {
         updateCryptoLock(); 
         updateStatusPopup(); 
 
+        // 🛑 NEW: Start the 1-second save interval after successful load
+        startSaveInterval();
+
     } catch (e) {
         console.error("Error loading document: ", e);
         renderItem(); 
+        // 🛑 NEW: If loading fails, start the save interval anyway to prevent data loss 
+        //         if the user starts playing (though this is less ideal).
+        startSaveInterval();
     }
 }
 
@@ -836,6 +845,7 @@ function updateStatusPopup() {
 
     statusBankBalanceEl.textContent = formatNumber(bankBalance) + "$";
     
+    // Note: Leaderboard update is asynchronous and can take time
     updateLeaderboard(); 
 
     renderLevelBar();
@@ -1041,6 +1051,19 @@ upgradeBtn.addEventListener("click", performUpgrade);
 
 // 🛑 ================= Startup and Authentication (New Firebase Flow) ================= 🛑
 
+// 🛑 NEW FUNCTION: Starts the 1-second interval for saving data
+function startSaveInterval() {
+    // Clear any existing interval to prevent duplicates
+    if (saveInterval) clearInterval(saveInterval); 
+    
+    // Save every 1000 milliseconds (1 second)
+    saveInterval = setInterval(saveUserData, 1000); 
+    console.log("Data auto-save started (1 second interval).");
+
+    // Also, ensure we try to save data when the user closes the window/tab
+    window.addEventListener('beforeunload', saveUserData);
+}
+
 function startGame(user) {
     currentUserID = user.uid;
     // 🛑 UPDATE: Display player name after loading (not just raw ID)
@@ -1050,6 +1073,7 @@ function startGame(user) {
     setInitialPrices(); 
     startAbuseCycle(); 
 
+    // loadUserData() will now call startSaveInterval() upon completion
     loadUserData(); 
 }
 
