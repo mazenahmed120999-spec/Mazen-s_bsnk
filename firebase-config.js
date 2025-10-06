@@ -1,11 +1,11 @@
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+// firebase-config.js - تم تصحيحه لضمان عمل الروابط (CDN) على GitHub Pages
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+// ⚠️ تم استبدال "firebase/..." بروابط CDN المباشرة ⚠️
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.1.0/firebase-app.js";
+import { getFirestore, doc, setDoc, collection, getDocs, getDoc } from "https://www.gstatic.com/firebasejs/9.1.0/firebase-firestore.js";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.1.0/firebase-auth.js";
+
+// مفاتيح مشروعك الخاصة (تم نسخها ولصقها من إرسالك)
 const firebaseConfig = {
   apiKey: "AIzaSyD-g_PM12TgelGQn7npmYybpGfSxTuwpi0",
   authDomain: "center-9ab44.firebaseapp.com",
@@ -16,6 +16,21 @@ const firebaseConfig = {
   measurementId: "G-S85P9EWGXM"
 };
 
-// Initialize Firebase
+// تهيئة Firebase
 const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+// تهيئة خدمات Firestore و Authentication
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+// 🔑 تصدير الكائنات والوظائف لملف main.js لاستخدامها
+export { 
+    db, 
+    auth, 
+    doc, 
+    setDoc, 
+    collection, 
+    getDocs, 
+    getDoc, 
+    signInAnonymously, 
+    onAuthStateChanged 
+};
