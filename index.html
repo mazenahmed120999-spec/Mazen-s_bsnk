@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Mini Trading App</title>
+<link rel="stylesheet" href="style.css" type="text/css" media="all" />
+
+<script type="module" src="firebase-config.js"></script>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="abuse-box" id="abuseBox">
+    <span class="label">Mazen’s Abuse :</span> <span id="abuseTimer">00:10</span>
+  </div>
+  
+  <div class="balance-box">
+    <span class="label">Balance: </span> <span id="balance">0</span>$
+  </div>
+</div>
+
+<div class="board">
+  <h2>Shop</h2>
+  <div class="items-container" id="itemsContainer">
+    <div class="item" id="car" data-price="30000" data-owned="0" data-min="-1000" data-max="2000">
+      <h3>🚗 Car</h3>
+      <div class="price">Price: <span class="price-val">30000</span>$</div>
+      <div class="owned">You have: <span class="owned-val">0</span></div>
+    </div>
+    <div class="item" id="house" data-price="50000" data-owned="0" data-min="-2000" data-max="3000">
+      <h3>🏠 House</h3>
+      <div class="price">Price: <span class="price-val">50000</span>$</div>
+      <div class="owned">You have: <span class="owned-val">0</span></div>
+    </div>
+    <div class="item" id="plane" data-price="200000" data-owned="0" data-min="-2000" data-max="6000">
+      <h3>✈️ Plane</h3>
+      <div class="price">Price: <span class="price-val">200000</span>$</div>
+      <div class="owned">You have: <span class="owned-val">0</span></div>
+    </div>
+    <div class="item" id="gold" data-price="600000" data-owned="0" data-min="-4000" data-max="6000">
+      <h3>💎 Gold</h3>
+      <div class="price">Price: <span class="price-val">600000</span>$</div>
+      <div class="owned">You have: <span class="owned-val">0</span></div>
+    </div>
+    <div class="item" id="crypto" data-price="1000000" data-owned="0" data-min="-200000" data-max="700000">
+      <h3>🪙 Crypto</h3>
+      <div class="price">Price: <span class="price-val">1000000</span>$</div>
+      <div class="owned">You have: <span class="owned-val">0</span></div>
+      <div class="crypto-lock" id="cryptoLock">🔒</div>
+    </div>
+    </div>
+
+  <div class="controls">
+    <div class="price-timer">Price Update : <span id="priceTimer">01:00</span></div>
+    <input type="number" id="amount" value="1" min="1" />
+    <div class="buttons">
+      <button id="buyBtn" disabled>Buy</button>
+      <button id="sellBtn" disabled>Sell</button>
+      <div class="status" id="statusMsg"></div>
+    </div>
+  </div>
+</div>
+
+<div class="trade-board">
+  <h2>Trade</h2>
+  <div class="trade-box">
+    <input type="number" id="tradeAmount" placeholder="Enter amount" />
+    <select id="tradeOption">
+      <option value="Apple" selected>Apple</option>
+      <option value="Btc">Btc</option>
+      <option value="Usdt">Usdt</option>
+    </select>
+    <button id="tradeBtn">Trade</button>
+  </div>
+</div>
+
+<div class="bottom-buttons">
+  <button id="spinBtn">🎰</button> 
+  <button id="statusBtn">✨</button> 
+  <button id="leaderboardBtn">🏆</button>
+  <button id="bankButton">🏦</button>
+  <button id="timeRewardBtn">💰</button>
+</div>
+
+<div class="popup-overlay" id="statusPopup">
+  <div class="popup" style="max-width: 450px;">
+    <button class="close-btn" id="closeStatusPopup">X</button> 
+    <h2>Account Status & Upgrade 🛠️</h2> 
+    
+    <div class="level-progress-bar">
+        <span class="level-indicator" id="levelIndicator">Level: <span id="currentLevelDisplay">1</span></span>
+        <div class="levels-track" id="levelsTrack">
+            </div>
+    </div>
+    
+    <div class="status-details">
+        <h3>Assets Owned</h3>
+        <p>🚗 Cars: <span id="ownedCar">0</span> / <span id="maxCar">50</span></p>
+        <p>🏠 Houses: <span id="ownedHouse">0</span> / <span id="maxHouse">40</span></p>
+        <p>✈️ Planes: <span id="ownedPlane">0</span> / <span id="maxPlane">20</span></p>
+        <p>💎 Gold: <span id="ownedGold">0</span> / <span id="maxGold">5</span></p>
+        <p>🪙 Crypto: <span id="ownedCrypto">0</span> / <span id="maxCrypto">0</span></p>
+        <hr/>
+        <p>💰 Bank Balance: <span id="statusBankBalance">0$</span></p>
+        <p>🏆 Leaderboard Rank: <span id="statusRank">N/A</span></p>
+    </div>
+    
+    <div class="upgrade-box">
+        <h3 id="nextLevelHeader">Upgrade to Level <span id="nextLevelNum">2</span></h3>
+        <div class="upgrade-requirements" id="upgradeRequirements">
+            </div>
+        <button id="upgradeBtn">Upgrade</button>
+        <p id="upgradeMsg" style="color: red; margin-top: 10px;"></p>
+    </div>
+
+  </div>
+</div>
+
+<div class="popup-overlay" id="leaderboardPopup">
+  <div class="popup">
+    <button class="close-btn" id="closeLeaderboardPopup">X</button> 
+    <h2>🏆 Global Leaderboard</h2> 
+    <div class="leaderboard-content">
+      <div class="leaderboard-header">
+        <span class="rank">#</span>
+        <span class="name">Player ID</span>
+        <span class="net-worth">Net Worth</span>
+      </div>
+      <div class="leaderboard-list" id="leaderboardList">
+        </div>
+    </div>
+    <p class="current-player-rank">Your Rank: <span id="myNetWorth">N/A</span></p>
+  </div>
+</div>
+
+<div class="popup-overlay" id="timeRewardPopup">
+    <div class="popup">
+        <button class="close-btn" id="closeTimeRewardPopup">X</button> 
+        <h2>🎁 Time Reward</h2> 
+        <p style="font-size: 16px; margin-bottom: 20px;">
+            <span id="rewardAmountDisplay">100,000</span>$ every 5 minutes
+        </p>
+        <h1 id="rewardTimerDisplay" style="margin-bottom: 25px;">05:00</h1>
+        <button id="claimRewardBtn">Claim Reward</button>
+        <p id="rewardStatus" style="font-size: 14px; color: gray; margin-top: 10px;">
+            Timer works only while the game is open.
+        </p>
+    </div>
+</div>
+
+<p id="userIDDisplay" style="position:fixed; bottom: 5px; right: 5px; font-size: 10px; color: #66c2ff; background: rgba(0,0,0,0.5); padding: 5px; border-radius: 5px;">
+  Player ID: Loading...
+</p>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>

@@ -1,0 +1,659 @@
+/* style.css - CSS Styles (Full updated code) */
+
+*{ margin:0; padding:0; box-sizing:border-box; font-family:"Segoe UI", Tahoma, Geneva, Verdana, sans-serif; }
+html,body { height:100%; }
+body{
+  /* Dark background with a light grid */
+  background: #0d1117; 
+  color:#f0f6fc;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  padding:15px;
+  overflow-x:hidden;
+}
+
+/* ====== TOP BAR ====== */
+.top-bar{
+  width:100%;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:15px;
+  gap: 10px;
+}
+.balance-box, .abuse-box{
+  /* Glassmorphism design */
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(5px);
+  border: 1px solid rgba(34, 139, 230, 0.5); /* Blue Neon border */
+  border-radius: 8px; 
+  padding:10px 15px;
+  font-size:15px;
+  font-weight: 600;
+  box-shadow:0 0 15px rgba(34, 139, 230, 0.2);
+  display:flex; align-items:center; justify-content:center; height:45px;
+  flex: 1;
+  color: #66c2ff; 
+  text-shadow: 0 0 8px rgba(102, 194, 255, 0.7); 
+}
+
+.balance-box .label, .abuse-box .label {
+    /* Change label color to be different from the number */
+    color: #f0f6fc; 
+    text-shadow: none; 
+    margin-right: 5px; 
+    display: inline-block; 
+}
+
+/* Warning / Danger design */
+.abuse-box.active{ animation: neonDanger 0.3s infinite; }
+
+@keyframes neonDanger {
+  0%{ border-color:#ff0077; color:#ff0077; box-shadow:0 0 10px rgba(255, 0, 119, 0.8); }
+  50%{ border-color:#228be6; color:#228be6; box-shadow:none; }
+  100%{ border-color:#ff0077; color:#ff0077; box-shadow:0 0 10px rgba(255, 0, 119, 0.8); }
+}
+
+/* ====== SHOP BOARD ====== */
+.board{
+  width:100%;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius:10px;
+  padding:20px 15px;
+  margin-bottom:15px;
+  text-align:center;
+  box-shadow:0 8px 32px 0 rgba(0, 0, 0, 0.3);
+}
+.board h2{
+  color:#66c2ff; 
+  text-shadow:0 0 10px rgba(102, 194, 255, 0.8); /* Blue Neon glow */
+  margin-bottom:20px; 
+  font-size:30px; 
+  font-weight:700;
+  letter-spacing: 1px;
+}
+.items-container{ 
+  width:100%; 
+  overflow-x:auto; 
+  white-space:nowrap; 
+  margin-bottom:20px; 
+  padding: 10px;
+}
+.items-container::-webkit-scrollbar{ display:none;}
+
+.item{
+  display:inline-block; vertical-align:top;
+  background: #161b22; /* Dark background for item */
+  border-radius:10px; 
+  border:1px solid #30363d;
+  width:140px; 
+  padding:15px; 
+  margin-right:10px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+  transition:transform .2s, border-color .2s, box-shadow .2s;
+  position: relative;
+  z-index: 1;
+}
+.item h3{ color: #f0f6fc; margin-bottom: 5px; font-size: 16px; }
+.item.active{ 
+    border-color:#66c2ff; 
+    box-shadow:0 0 20px rgba(102, 194, 255, 1);
+    transform: translateY(-5px) scale(1.05); 
+    z-index: 10; 
+}
+
+/* ====== SHOP ITEM LOCK (Crypto Lock) ====== */
+.crypto-lock {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    border-radius: 10px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 50px;
+    font-weight: bold;
+    color: #ff0077; /* Distinct color for lock */
+    pointer-events: none; 
+    opacity: 1;
+    transition: opacity 0.3s;
+    z-index: 15;
+}
+
+/* Lock unlocked state */
+#crypto .crypto-lock.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* ====== CONTROLS ====== */
+.controls input[type=number]{ 
+    width:80%; 
+    padding:10px; 
+    border-radius:8px; 
+    border:1px solid #30363d; 
+    background: #0d1117;
+    color: #66c2ff; 
+    text-align:center; 
+    font-size:16px; 
+    margin-bottom:15px; 
+    box-shadow: inset 0 0 5px rgba(102, 194, 255, 0.3);
+}
+.price-timer{ 
+    color:#66c2ff; 
+    margin-bottom:15px; 
+    font-weight:700; 
+    text-shadow:0 0 8px rgba(102, 194, 255, 0.7); 
+}
+.buttons{ 
+    display:flex; 
+    justify-content:space-around; 
+    width:100%; 
+    position:relative; 
+    margin-bottom:10px; 
+    gap: 10px;
+}
+button{ 
+    flex:1; 
+    padding:14px 0; 
+    border-radius:8px; 
+    border:none; 
+    font-size:17px; 
+    background:#30363d; 
+    color:#f0f6fc;
+    font-weight: 600;
+    transition: 0.2s;
+    cursor: pointer;
+}
+button:hover:not(:disabled) { background: #4a5460; }
+button:disabled { cursor: not-allowed; opacity: 0.6; }
+
+/* Distinct Buy/Sell buttons */
+#buyBtn.active{ 
+    background:#238636; /* Dark Green for Buy */
+    color:#fff; 
+    box-shadow:0 0 10px rgba(35, 134, 54, 0.7);
+}
+#sellBtn.active{ 
+    background:#da3633; /* Dark Red for Sell */
+    color:#fff; 
+    box-shadow:0 0 10px rgba(218, 54, 51, 0.7);
+}
+
+/* ====== TRADE BOARD ====== */
+.trade-board{
+  width:100%;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius:10px;
+  padding:25px 20px;
+  margin-top:15px;
+  text-align:center;
+  box-shadow:0 8px 32px 0 rgba(0, 0, 0, 0.3);
+}
+.trade-board h2{ 
+  color:#66c2ff; 
+  text-shadow:0 0 10px rgba(102, 194, 255, 0.8);
+  margin-bottom:20px; 
+  font-size:30px; 
+  font-weight:700; 
+}
+.trade-box input, .trade-box select{
+  width:90%; margin:7px auto; display:block; 
+  padding:12px;
+  border-radius:8px; border:1px solid #30363d;
+  font-size:16px; text-align:center;
+  background: #0d1117;
+  color: #fff;
+}
+.trade-box button{
+  width:90%; 
+  margin:15px auto 7px; 
+  display:block;
+  background:#66c2ff; /* Blue Neon for Trade Button */
+  color:#0d1117; 
+  font-weight:800; 
+  font-size:18px;
+  padding: 14px;
+  box-shadow: 0 0 15px rgba(102, 194, 255, 0.6);
+  transition:0.2s;
+}
+.trade-box button:hover:not(:disabled){ 
+    background:#85d6ff; 
+    box-shadow: 0 0 20px rgba(133, 214, 255, 0.8);
+}
+
+/* ====== BOTTOM BUTTONS (Bottom Toolbar) ====== */
+.bottom-buttons {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  margin-top: 20px;
+  gap: 10px;
+}
+.bottom-buttons button {
+  flex: 1;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 10px;
+  padding: 15px 0;
+  color: #66c2ff; /* Blue Neon Icons */
+  font-size: 24px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+}
+.bottom-buttons button:hover {
+  background: #21262d;
+  border-color: #66c2ff;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(102, 194, 255, 0.3);
+}
+
+/* ====== POPUP (Modal) - General Design ====== */
+.popup-overlay {
+  position: fixed; top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(13, 17, 23, 0.95);
+  display: none;
+  justify-content: center; align-items: center;
+  z-index: 999;
+}
+.popup {
+  background: #161b22;
+  border: 2px solid #66c2ff;
+  border-radius: 12px;
+  box-shadow: 0 0 40px rgba(102, 194, 255, 0.8);
+  text-align: center;
+  padding: 30px 40px; 
+  width: 90%; max-width: 380px;
+  position: relative;
+}
+.popup h2 {
+  color: #66c2ff;
+  margin-bottom: 20px;
+  font-size: 26px; 
+  max-width: 80%; 
+  margin: 0 auto 20px auto; 
+  text-shadow: 0 0 10px rgba(102, 194, 255, 0.8);
+}
+.popup input {
+  width: 90%; padding: 14px;
+  border: 1px solid #30363d; 
+  border-radius: 8px;
+  background: #0d1117;
+  color: #fff;
+  font-size: 18px; text-align: center;
+  margin-bottom: 15px;
+}
+.popup button {
+  background: #66c2ff;
+  border: none; 
+  border-radius: 8px;
+  padding: 12px 25px;
+  color: #0d1117; 
+  font-weight: 800; 
+  font-size: 18px;
+  cursor: pointer; transition: 0.2s;
+  margin: 5px 8px; 
+}
+.popup button:hover:not(:disabled) {
+  background: #85d6ff;
+  box-shadow: 0 0 15px rgba(133, 214, 255, 0.6);
+}
+.close-btn {
+  position: absolute; 
+  top: 10px; 
+  right: 5px; 
+  background: transparent; border: none;
+  color: #f0f6fc; 
+  font-size: 24px; 
+  cursor: pointer;
+  transition: 0.2s;
+  z-index: 999; 
+}
+.close-btn:hover {
+  color: #ff0077;
+  transform: scale(1.1);
+}
+
+/* ====== BANK POPUP ====== */
+.amount-box {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.amount-box input {
+  width: 65%;
+  padding: 14px;
+}
+
+#maxBtn {
+  padding: 10px 12px;
+  font-size: 14px;
+  width: 70px; 
+  background: #30363d;
+  color: #66c2ff;
+  border: 1px solid #66c2ff;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+#maxBtn:hover {
+  background: #4a5460;
+  transform: scale(1.02);
+}
+
+/* ====== POPUP - Spin Wheel Design ====== */
+.wheel-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 25px 0;
+}
+
+.wheel {
+    width: 260px;
+    height: 260px;
+    border-radius: 50%;
+    /* Future segments colors */
+    background-image: conic-gradient(
+        #228be6 0deg 72deg,    /* Light Blue */
+        #ff0077 72deg 144deg,   /* Fuchsia */
+        #c0c0c0 144deg 216deg,  /* Silver (Highlight) */
+        #228be6 216deg 288deg,   /* Light Blue */
+        #ff0077 288deg 360deg    /* Fuchsia */
+    );
+    border: 5px solid #161b22;
+    box-shadow: 0 0 25px rgba(102, 194, 255, 0.6);
+    position: relative;
+    transition: transform 5s cubic-bezier(0.2, 0.8, 0.2, 1); 
+}
+
+/* Wheel Pointer */
+.pointer {
+    position: absolute;
+    top: -10px; 
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 12px solid transparent;
+    border-right: 12px solid transparent;
+    border-bottom: 20px solid #ff0077; /* Fuchsia for attention */
+    z-index: 1000;
+}
+
+/* Spin Button Styling */
+#spinWheelBtn {
+    margin-top: 15px;
+    background: #ff0077; /* Distinct color for the button */
+    color: #fff;
+    font-size: 20px;
+    padding: 14px 40px;
+    font-weight: 900;
+    box-shadow: 0 0 15px rgba(255, 0, 119, 0.7);
+}
+
+#spinWheelBtn:disabled {
+    background: #30363d;
+    color: #a0a0a0;
+    box-shadow: none;
+}
+
+/* ====== LEADERBOARD POPUP ====== */
+.leaderboard-content {
+    margin-top: 20px;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 10px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.leaderboard-header, .leaderboard-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 5px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.leaderboard-header {
+    color: #00ffb3; /* Light green for headers */
+    border-bottom: 2px solid #30363d;
+    text-transform: uppercase;
+}
+
+.leaderboard-item {
+    border-bottom: 1px solid #161b22;
+    transition: background-color 0.1s;
+}
+
+.leaderboard-item:nth-child(even) {
+    background-color: #12151b; /* Darker background for even rows */
+}
+
+/* Highlight Rank 1 */
+.leaderboard-item.rank-1 {
+    font-size: 15px;
+    font-weight: 900;
+    color: #ffcc00; /* Gold */
+    text-shadow: 0 0 5px rgba(255, 204, 0, 0.7);
+}
+
+.rank { width: 10%; text-align: center; }
+.name { width: 50%; text-align: left; }
+.net-worth { width: 40%; text-align: right; color: #66c2ff; }
+
+.current-player-rank {
+    margin-top: 15px;
+    font-size: 16px;
+    font-weight: 700;
+    color: #f0f6fc;
+}
+.current-player-rank #myNetWorth {
+    color: #00ffb3; /* Net worth in distinct color */
+    text-shadow: 0 0 5px rgba(0, 255, 179, 0.7);
+}
+
+/* ====== ACCOUNT STATUS POPUP (Account Status & Upgrade Screen) ====== */
+.status-details {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+    text-align: left;
+}
+.status-details h3 {
+    color: #00ffb3; /* Green for Assets */
+    margin-bottom: 10px;
+    font-size: 18px;
+}
+.status-details p {
+    margin: 5px 0;
+    font-size: 14px;
+    font-weight: 500;
+}
+.status-details hr {
+    border: 0;
+    height: 1px;
+    background: #30363d;
+    margin: 10px 0;
+}
+.status-details span {
+    font-weight: 700;
+    color: #66c2ff;
+}
+
+/* Level Progress Bar */
+.level-progress-bar {
+    margin-bottom: 25px;
+    text-align: left;
+    position: relative;
+    padding-top: 25px;
+}
+.level-indicator {
+    display: block;
+    font-weight: 700;
+    color: #f0f6fc;
+    margin-bottom: 10px;
+    position: absolute;
+    top: 0; left: 0;
+}
+#currentLevelDisplay {
+    color: #ffcc00; /* Gold for Current Level */
+}
+.levels-track {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    padding: 0 5px;
+}
+.level-dot {
+    width: 25px; height: 25px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 12px;
+    font-weight: 900;
+    z-index: 2;
+    background: #30363d; /* Default color (Gray) */
+    color: #a0a0a0;
+    position: relative;
+    border: 2px solid #30363d;
+    transition: all 0.3s;
+}
+
+/* Completed Levels (Passed) */
+.level-dot.passed {
+    background: #238636; /* Completed Green */
+    border-color: #00ffb3;
+    color: #fff;
+}
+
+/* Current Level (Current) */
+.level-dot.current {
+    background: #ffcc00; /* Gold/Yellow */
+    border-color: #ffefb3;
+    color: #0d1117;
+    transform: scale(1.1);
+}
+
+/* Next Level (Next/Required) */
+.level-dot.next {
+    background: #00ffb3; /* Light Green */
+    border-color: #fff;
+    color: #0d1117;
+    box-shadow: 0 0 10px rgba(0, 255, 179, 0.8);
+}
+
+/* Upgrade Box */
+.upgrade-box {
+    background: #0d1117;
+    border: 1px solid #66c2ff;
+    border-radius: 8px;
+    padding: 15px;
+    text-align: center;
+}
+.upgrade-box h3 {
+    color: #66c2ff;
+    margin-bottom: 10px;
+    font-size: 18px;
+}
+.upgrade-requirements {
+    font-size: 14px;
+    color: #f0f6fc;
+    margin-bottom: 15px;
+    min-height: 20px;
+}
+.upgrade-requirements p {
+    margin: 5px 0;
+    font-weight: 500;
+}
+.upgrade-requirements .req-ok {
+    color: #00ffb3; /* Green for met requirement */
+}
+.upgrade-requirements .req-fail {
+    color: #ff5050; /* Red for unmet requirement */
+}
+
+#upgradeBtn {
+    width: 90%;
+    background: #66c2ff;
+    color: #0d1117;
+    font-weight: 900;
+    box-shadow: 0 0 10px rgba(102, 194, 255, 0.7);
+}
+#upgradeBtn:disabled {
+    background: #30363d;
+    color: #a0a0a0;
+    box-shadow: none;
+}
+
+/* ====== TIME REWARD POPUP ====== */
+#timeRewardPopup .popup {
+    max-width: 350px;
+    border-color: #00ffb3; /* Light green border */
+    box-shadow: 0 0 40px rgba(0, 255, 179, 0.8);
+}
+
+#timeRewardPopup h2 {
+    color: #00ffb3;
+    text-shadow: 0 0 10px rgba(0, 255, 179, 0.8);
+}
+
+#rewardAmountDisplay {
+    font-weight: 900;
+    color: #ffcc00; /* Gold color for amount */
+    font-size: 20px;
+    text-shadow: 0 0 5px rgba(255, 204, 0, 0.7);
+}
+
+#rewardTimerDisplay {
+    font-size: 55px;
+    font-weight: 900;
+    color: #66c2ff; /* Blue color for timer */
+    text-shadow: 0 0 15px rgba(102, 194, 255, 0.7);
+}
+
+#claimRewardBtn {
+    width: 90%;
+    background: #00ffb3; /* Neon green for claim button */
+    color: #0d1117;
+    font-weight: 900;
+    font-size: 20px;
+    padding: 14px 0;
+    box-shadow: 0 0 15px rgba(0, 255, 179, 0.7);
+}
+
+/* Ready to claim state */
+#claimRewardBtn.ready-to-claim {
+    background: #ffcc00; /* Gold color for ready state */
+    color: #0d1117;
+    box-shadow: 0 0 20px rgba(255, 204, 0, 0.9);
+    animation: pulse 1.5s infinite;
+}
+
+#claimRewardBtn:disabled {
+    background: #30363d;
+    color: #a0a0a0;
+    box-shadow: none;
+    animation: none;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.03); }
+    100% { transform: scale(1); }
+}
