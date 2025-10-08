@@ -123,8 +123,19 @@ const depositBtn = document.getElementById('depositBtn');
 const withdrawBtn = document.getElementById('withdrawBtn');
 
 let selectedItem = null;
-let priceUpdateEngine; 
-let syncEngine; // 🛑 New engine for 1-second sync
+// let priceUpdateEngine; // 🛑 NO LONGER NEEDED. Prices updated on sync. 
+let syncEngine; // 🛑 Engine for 1-second sync
+
+// 🛑 متغيرات حالة السوق (تم نقلها من الأعلى وتعديلها)
+let marketState = 'normal'; // 'normal' or 'abuse'
+let currentRanges = {}; // سيتم تعيينها عند تحميل حالة السوق
+const NORMAL_CYCLE_TIME = 240; // 4 minutes
+const ABUSE_DURATION = 60; // 1 minute
+const NORMAL_UPDATE_SPEED = 60000; // 60 seconds
+const ABUSE_UPDATE_SPEED = 5000; // 5 seconds
+let nextPriceUpdateTime = 0; // متى سيتم تحديث الأسعار التالية (بتوقيت Unix Timestamp)
+let abuseStartTime = 0; // متى بدأت دورة الـ abuse/normal الحالية (بتوقيت Unix Timestamp)
+let priceTimerSeconds = 0; 
 
 const normalRanges = {
   car: { min: -1000, max: 2000 },
@@ -141,8 +152,6 @@ const abuseRanges = {
   gold: { min: -3000, max: 10000 },
   crypto: { min: -200000, max: 2000000 }
 };
-
-let currentRanges = { ...normalRanges };
 
 // 🛑 Level Variables and Constraints (Unchanged)
 const BASE_LIMITS = {
@@ -227,15 +236,35 @@ function randInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-function updatePrices() {
+/** 🛑 NEW: Updates the price data in the UI and also in Firebase's 'game_state' document. */
+async function updatePrices() {
+  const newPrices = {};
+  
   items.forEach(item => {
     let price = parseInt(item.dataset.price, 10);
     const range = currentRanges[item.id];
     const change = randInt(range.min, range.max);
     price = Math.max(10, price + change);
     item.dataset.price = Math.round(price);
+    
+    newPrices[item.id] = Math.round(price);
     renderItem(item); // Renders price to UI
   });
+
+  // 🔑 Save the new prices and the next update time to Firebase
+  nextPriceUpdateTime = Date.now() + (marketState === 'normal' ? NORMAL_UPDATE_SPEED : ABUSE_UPDATE_SPEED);
+  
+  try {
+      await setDoc(doc(db, "game_state", "market"), {
+          current_prices: newPrices,
+          next_price_update: nextPriceUpdateTime,
+          current_market_state: marketState,
+          abuse_start_time: abuseStartTime,
+      }, { merge: true });
+      // console.log("Market data updated successfully!");
+  } catch (e) {
+      console.error("Error updating market data: ", e);
+  }
 }
 
 function updateCryptoLock() {
@@ -495,8 +524,6 @@ function updateSpinCooldown() {
     return remaining;
 }
 
-// setInterval(updateSpinCooldown, 1000); // 🛑 Moved to syncData
-
 function spinWheelAction() {
     if (isSpinning || updateSpinCooldown() > 0) {
         return;
@@ -562,87 +589,143 @@ spinBtn.addEventListener("click", () => {
 });
 
 
-// ================= Mazen’s Abuse Timer (Unchanged) =================
+// 🛑 ================= MARKET STATE & ABUSE TIMER SYNCHRONIZATION (NEW) ================= 🛑
 
-let abuseCycleInterval; 
+/**
+ * 🔑 Fetches the current market state from Firebase and updates local UI/variables.
+ * 🔑 Triggers a market update if the time is past `next_price_update`.
+ */
+async function syncMarketState() {
+    const marketRef = doc(db, "game_state", "market");
+    const marketSnap = await getDoc(marketRef);
+    const now = Date.now();
 
-const NORMAL_UPDATE_SPEED = 60000; 
-const ABUSE_UPDATE_SPEED = 5000; 
-let priceTimerSeconds = NORMAL_UPDATE_SPEED / 1000; 
+    if (marketSnap.exists()) {
+        const data = marketSnap.data();
 
-function setPriceUpdateEngine(intervalMs) {
-    if (priceUpdateEngine) clearInterval(priceUpdateEngine);
-    updatePrices(); 
-    priceUpdateEngine = setInterval(updatePrices, intervalMs);
-}
-
-function updatePriceTimerDisplay() {
-    const mins = Math.floor(priceTimerSeconds / 60);
-    const secs = priceTimerSeconds % 60;
-    priceTimerEl.textContent = `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
-}
-
-function startAbuseCycle() {
-    const normalCycleTimeInitial = 240; 
-    const abuseDuration = 60; 
-    
-    if (abuseCycleInterval) clearInterval(abuseCycleInterval);
-    
-    let timerState = 'normal';
-    let timerSeconds = normalCycleTimeInitial;
-    
-    currentRanges = { ...normalRanges };
-    abuseBox.classList.remove('active');
-    
-    const initialMins = Math.floor(normalCycleTimeInitial / 60);
-    const initialSecs = normalCycleTimeInitial % 60;
-    abuseTimerEl.textContent = `${initialMins < 10 ? '0' : ''}${initialMins}:${initialSecs < 10 ? '0' : ''}${initialSecs}`;
-
-    priceTimerSeconds = NORMAL_UPDATE_SPEED / 1000;
-    updatePriceTimerDisplay(); 
-    
-    setPriceUpdateEngine(NORMAL_UPDATE_SPEED);
-    
-    abuseCycleInterval = setInterval(() => {
-        timerSeconds--;
+        // 1. Update Market Prices LOCALLY (from the synced data)
+        if (data.current_prices) {
+            items.forEach(item => {
+                const newPrice = data.current_prices[item.id];
+                if (newPrice !== undefined) {
+                    item.dataset.price = newPrice;
+                }
+            });
+        }
         
-        const mins = Math.floor(timerSeconds / 60);
-        const secs = timerSeconds % 60;
-        abuseTimerEl.textContent = `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
+        // 2. Update Market State Variables
+        marketState = data.current_market_state || 'normal';
+        abuseStartTime = data.abuse_start_time || now;
+        nextPriceUpdateTime = data.next_price_update || (now + NORMAL_UPDATE_SPEED);
 
-        if (timerState === 'normal') {
-             priceTimerSeconds--;
-             if (priceTimerSeconds < 0) {
-                 priceTimerSeconds = NORMAL_UPDATE_SPEED / 1000; 
-             }
-             updatePriceTimerDisplay();
-
-        } else {
-             priceTimerEl.textContent = "Mazen’s Abuse 🔥"; 
+        // 3. Check for Time/State Change (This is the CORE synchronization logic)
+        const isTimeForPriceUpdate = now >= nextPriceUpdateTime;
+        const isTimeForCycleChange = (marketState === 'normal' && (now - abuseStartTime) > (NORMAL_CYCLE_TIME * 1000)) ||
+                                     (marketState === 'abuse' && (now - abuseStartTime) > (ABUSE_DURATION * 1000));
+        
+        
+        // 🚨 Scenario A: Time for a Market Cycle Change (Abuse <> Normal)
+        if (isTimeForCycleChange) {
+            const newMarketState = marketState === 'normal' ? 'abuse' : 'normal';
+            
+            // Set new state globally via Firebase
+            await setDoc(marketRef, {
+                current_market_state: newMarketState,
+                abuse_start_time: now,
+                // Force a price update immediately after cycle change
+                next_price_update: now, 
+            }, { merge: true });
+            
+            // Update local state temporarily for the next block
+            marketState = newMarketState;
+            abuseStartTime = now;
         }
 
-        if (timerSeconds < 0) {
-            if (timerState === 'normal') {
-                timerState = 'abuse';
-                timerSeconds = abuseDuration;
-                currentRanges = { ...abuseRanges };
-                abuseBox.classList.add('active');
-                setPriceUpdateEngine(ABUSE_UPDATE_SPEED);
-                priceTimerEl.textContent = "Mazen’s Abuse 🔥";
-            } else {
-                timerState = 'normal';
-                timerSeconds = normalCycleTimeInitial;
-                currentRanges = { ...normalRanges };
-                abuseBox.classList.remove('active');
-                setPriceUpdateEngine(NORMAL_UPDATE_SPEED);
-                
-                priceTimerSeconds = NORMAL_UPDATE_SPEED / 1000; 
-                updatePriceTimerDisplay();
-            }
+
+        // 🚨 Scenario B: Time for a Price Update (Only one client does this)
+        if (isTimeForPriceUpdate) {
+            
+            // Set ranges based on the synced market state
+            currentRanges = marketState === 'abuse' ? abuseRanges : normalRanges;
+            
+            // This client is responsible for generating and saving the new prices.
+            await updatePrices(); // Calls updatePrices which updates prices in Firebase
         }
-    }, 1000);
+        
+    } else {
+        // 🛑 NEW GAME STATE: Create the initial market state if it doesn't exist
+        console.log("Initializing Market State in Firebase...");
+        const initialPrices = {};
+        items.forEach(item => {
+            initialPrices[item.id] = parseInt(item.dataset.price, 10);
+        });
+        
+        await setDoc(marketRef, {
+            current_prices: initialPrices,
+            current_market_state: 'normal',
+            abuse_start_time: now,
+            next_price_update: now + NORMAL_UPDATE_SPEED,
+        });
+        
+        // Load the initial data back in case of race condition
+        syncMarketState();
+        return;
+    }
+    
+    // 4. Update UI Timers after sync/update
+    updateAbuseTimerDisplay();
+    
+    // Set ranges locally after the sync is complete
+    currentRanges = marketState === 'abuse' ? abuseRanges : normalRanges;
+    if (marketState === 'abuse') {
+        abuseBox.classList.add('active');
+    } else {
+        abuseBox.classList.remove('active');
+    }
 }
 
+
+function updateAbuseTimerDisplay() {
+    const now = Date.now();
+    let remainingCycleTimeMs;
+    let cycleDurationSeconds; 
+    let priceUpdateInterval;
+    
+    if (marketState === 'normal') {
+        cycleDurationSeconds = NORMAL_CYCLE_TIME;
+        priceUpdateInterval = NORMAL_UPDATE_SPEED / 1000;
+        
+        // Remaining time until it switches to ABSE
+        remainingCycleTimeMs = (abuseStartTime + (NORMAL_CYCLE_TIME * 1000)) - now;
+        
+    } else { // 'abuse'
+        cycleDurationSeconds = ABUSE_DURATION;
+        priceUpdateInterval = ABUSE_UPDATE_SPEED / 1000;
+
+        // Remaining time until it switches back to NORMAL
+        remainingCycleTimeMs = (abuseStartTime + (ABUSE_DURATION * 1000)) - now;
+    }
+
+    const remainingCycleSeconds = Math.max(0, Math.floor(remainingCycleTimeMs / 1000));
+
+    // Update Abuse Cycle Timer (Big Timer)
+    const mins = Math.floor(remainingCycleSeconds / 60);
+    const secs = remainingCycleSeconds % 60;
+    abuseTimerEl.textContent = `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
+
+    // Update Price Update Timer (Small Timer)
+    if (marketState === 'abuse') {
+        priceTimerEl.textContent = "Mazen’s Abuse 🔥";
+    } else {
+        priceTimerSeconds = Math.max(0, Math.floor((nextPriceUpdateTime - now) / 1000));
+        const pMins = Math.floor(priceTimerSeconds / 60);
+        const pSecs = priceTimerSeconds % 60;
+        priceTimerEl.textContent = `${pMins < 10 ? '0' : ''}${pMins}:${pSecs < 10 ? '0' : ''}${pSecs}`;
+    }
+}
+
+
+// 🛑 OLD startAbuseCycle() is completely removed!
 
 // 🛑 ================= FIREBASE DATA MANAGEMENT (Updated for Token Login) ================= 🛑
 
@@ -726,8 +809,6 @@ async function loadUserData() {
         updateCryptoLock(); 
         updateStatusPopup(); 
         
-        // 🛑 No longer displays Token/ID at the bottom left.
-        
     } catch (e) {
         console.error("Error loading document: ", e);
         renderItem(); 
@@ -788,14 +869,15 @@ async function updateLeaderboard() {
     statusRankEl.textContent = playerRank;
 }
 
-// 🛑 ================= Sync Function (New) ================= 🛑
+// 🛑 ================= Sync Function (Updated) ================= 🛑
 
-/** Updates UI (Balances/Timers) and saves data every second. */
-function syncData() {
-    renderItem();           // Update Balances/Prices on UI
+/** Updates UI (Balances/Timers), saves data, and synchronizes market state every second. */
+async function syncData() {
+    await syncMarketState(); // Fetch market state (including prices) and update UI (Price/Abuse Timer)
+    renderItem();           // Update Balances/Owned on UI
     updateSpinCooldown();   // Update Spin Timer
     checkTimeElapsedAndStartTimer(); // Update Reward Timer
-    saveUserData();         // Save everything to Firestore
+    saveUserData();         // Save player data to Firestore
 }
 
 // ================= Account Status and Upgrade Logic (Unchanged) ================= 
@@ -840,7 +922,8 @@ function updateStatusPopup() {
     maxHouseEl.textContent = getAssetLimit('house');
 
     document.getElementById('ownedPlane').textContent = document.getElementById('plane').dataset.owned;
-    maxPlaneEl.textContent = getAssetLimit('plane');
+    document.getElementById('maxPlaneEl').textContent = getAssetLimit('plane'); // 🛑 Fixed element ID here
+    // maxPlaneEl.textContent = getAssetLimit('plane'); // 🛑 Corrected, element is defined globally
 
     document.getElementById('ownedGold').textContent = document.getElementById('gold').dataset.owned;
     maxGoldEl.textContent = getAssetLimit('gold');
@@ -964,7 +1047,7 @@ function updateRewardTimer() {
     if (rewardSeconds <= 0) {
         rewardSeconds = 0;
         isClaimReady = true;
-        // updateRewardTimer(); // Don't call recursively
+        // updateRewardTimer(); 
         return;
     }
 
@@ -977,7 +1060,7 @@ function startRewardTimer(initialSeconds) {
     // 🛑 No longer using an interval here, now part of syncData
     rewardSeconds = initialSeconds;
     isClaimReady = (rewardSeconds <= 0);
-    updateRewardTimer(); 
+    // updateRewardTimer(); // This logic is now handled inside syncData's constant loop
 }
 
 function claimTimeReward() {
@@ -1015,6 +1098,8 @@ function checkTimeElapsedAndStartTimer() {
     } else {
         startRewardTimer(timeRemaining);
     }
+    
+    updateRewardTimer(); // Now call it inside the sync loop
 }
 
 
@@ -1054,7 +1139,7 @@ function startGame(token, pName) {
     playerName = pName;
     
     setInitialPrices(); 
-    startAbuseCycle(); 
+    // 🛑 We no longer call startAbuseCycle() here. It's handled by syncMarketState(). 
     loadUserData(); 
     
     // 🛑 Start 1-second sync engine 
@@ -1071,6 +1156,9 @@ function initialSetup() {
     if (tempToken) {
         const finalName = tempName || `Trader ${tempToken}`;
         
+        // 🔑 Save the token as the permanent game token and start the game
+        localStorage.setItem('gameToken', tempToken); 
+        
         localStorage.removeItem('tempToken');
         localStorage.removeItem('tempPlayerName');
         
@@ -1078,8 +1166,9 @@ function initialSetup() {
     } 
     
     else if (savedToken) {
-        // 🛑 Still redirecting to login to prevent auto-login, forcing user to use the token
-        window.location.replace('login.html');
+        // 🔑 If saved token exists, use it to start the game directly.
+        // NOTE: The name is currently NOT saved with the token, so we use a generic one or assume it's set in Firestore.
+        startGame(savedToken, `Trader ${savedToken}`);
     }
     
     else {
