@@ -183,13 +183,14 @@ body {
 <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-firestore.js"></script>
 
+
 <script defer>
     
     // 🛑 ========================================================== 🛑
     // 🛑 ============== FIREBASE CONFIGURATION (MERGED) ============= 🛑
     // 🛑 ========================================================== 🛑
     
-    // تأكد من أن هذه الدوال متوفرة على مستوى النافذة (Window)
+    // استخدام اسم الدالة مباشرة من النطاق العام (Global Scope)
     const { initializeApp } = firebase;
     const { getFirestore, doc, getDoc } = firebase.firestore;
     
