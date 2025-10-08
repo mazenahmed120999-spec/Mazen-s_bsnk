@@ -1,7 +1,7 @@
-// main.js - The full script code (Fixed for Leaderboard Display)
+// main.js - The full script code (UPDATED FOR GITHUB/FIREBASE)
 
-// 🛑 Import Firebase modules and functions 🛑
-import { db, auth, doc, setDoc, collection, getDocs, signInAnonymously, onAuthStateChanged, getDoc } from './firebase-config.js';
+// 🛑 Import Firebase modules and functions (ASSUMING SUCCESSFUL CONNECTION) 🛑
+import { db, doc, setDoc, collection, getDocs, getDoc } from './firebase-config.js';
 
 document.addEventListener('gesturestart', e => e.preventDefault());
 
@@ -20,7 +20,7 @@ const priceTimerEl = document.getElementById('priceTimer');
 // Additional Elements
 const bankBtn = document.getElementById('bankButton');
 const spinBtn = document.getElementById('spinBtn');
-const userIDDisplayEl = document.getElementById('userIDDisplay'); 
+// 🛑 تم حذف userIDDisplayEl 🛑
 
 // Leaderboard Elements
 const leaderboardBtn = document.getElementById('leaderboardBtn');
@@ -105,8 +105,8 @@ const spinResultEl = document.getElementById("spinResult");
 const spinCooldownTimerEl = document.getElementById("spinCooldownTimer");
 
 // **Game State Variables**
-let currentUserID = null;
-let playerName = "Player"; // 🛑 NEW: Player's display name
+let currentUserID = null; 
+let playerName = "Player"; 
 let balance = 100000; 
 let bankBalance = 0; 
 let currentLevel = 1;
@@ -124,6 +124,7 @@ const withdrawBtn = document.getElementById('withdrawBtn');
 
 let selectedItem = null;
 let priceUpdateEngine; 
+let syncEngine; // 🛑 New engine for 1-second sync
 
 const normalRanges = {
   car: { min: -1000, max: 2000 },
@@ -202,6 +203,7 @@ function formatNumber(num) {
   return num.toString();
 }
 
+/** 🛑 Renders UI elements (Balances, Prices, Owned) but DOES NOT SAVE DATA. */
 function renderItem(item) {
     balanceEl.textContent = formatNumber(balance);
     bankBalanceDisplay.textContent = formatNumber(bankBalance);
@@ -218,8 +220,7 @@ function renderItem(item) {
         });
     }
 
-    // Call save data after rendering
-    saveUserData();
+    // Call save data only from syncData or on major actions (like upgrade)
 }
 
 function randInt(min, max) {
@@ -233,7 +234,7 @@ function updatePrices() {
     const change = randInt(range.min, range.max);
     price = Math.max(10, price + change);
     item.dataset.price = Math.round(price);
-    renderItem(item); // Renders price and saves data
+    renderItem(item); // Renders price to UI
   });
 }
 
@@ -323,6 +324,7 @@ buyBtn.addEventListener('click', () => {
         owned += qty;
         selectedItem.dataset.owned = owned;
         renderItem(selectedItem); 
+        saveUserData(); // Save after successful transaction
         flashButton(buyBtn, '✅', '#00ffb3');
         applyCooldown(buyBtn);
     } else {
@@ -350,6 +352,7 @@ sellBtn.addEventListener('click', () => {
   balance += price;
   selectedItem.dataset.owned = owned;
   renderItem(selectedItem); 
+  saveUserData(); // Save after successful transaction
   flashButton(sellBtn, '✅', '#00ffb3');
   applyCooldown(sellBtn);
 });
@@ -400,6 +403,7 @@ tradeBtn.addEventListener('click', () => {
       const gain = Math.round(tradeAmt * perc / 100);
       balance += gain;
       renderItem(selectedItem || items[0]); 
+      saveUserData(); // Save after successful transaction
       
       tradeBtn.textContent = `${perc >= 0 ? '+' : ''}${perc}% → ${gain >= 0 ? '+' : ''}${formatNumber(gain)}$`;
       
@@ -429,6 +433,7 @@ depositBtn.addEventListener('click', () => {
         bankBalance += amount;
         bankAmountInput.value = 0; 
         renderItem(); 
+        saveUserData(); // Save after successful transaction
         flashButton(depositBtn, '✅', '#00ffb3');
     } else {
         flashButton(depositBtn, '❌', 'red');
@@ -448,6 +453,7 @@ withdrawBtn.addEventListener('click', () => {
         balance += amount;
         bankAmountInput.value = 0; 
         renderItem(); 
+        saveUserData(); // Save after successful transaction
         flashButton(withdrawBtn, '✅', '#00ffb3');
     } else {
         flashButton(withdrawBtn, '❌', 'red');
@@ -489,7 +495,7 @@ function updateSpinCooldown() {
     return remaining;
 }
 
-setInterval(updateSpinCooldown, 1000);
+// setInterval(updateSpinCooldown, 1000); // 🛑 Moved to syncData
 
 function spinWheelAction() {
     if (isSpinning || updateSpinCooldown() > 0) {
@@ -527,6 +533,7 @@ function spinWheelAction() {
         if (finalSegment) {
             balance += gain;
             renderItem(); 
+            saveUserData(); // Save after successful spin
             spinResultEl.textContent = `${finalSegment.text}! You won ${formatNumber(gain)}$`;
             spinResultEl.style.color = finalSegment.color;
         } else {
@@ -637,7 +644,7 @@ function startAbuseCycle() {
 }
 
 
-// 🛑 ================= FIREBASE DATA MANAGEMENT (Updated with PlayerName) ================= 🛑
+// 🛑 ================= FIREBASE DATA MANAGEMENT (Updated for Token Login) ================= 🛑
 
 function calculateNetWorth() {
     let totalAssetValue = 0;
@@ -652,7 +659,7 @@ function calculateNetWorth() {
     return playerNetWorth;
 }
 
-/** Saves all player data and game state to Firestore. */
+/** 🛑 Saves all player data and game state to Firestore. Called on major actions OR sync. */
 async function saveUserData() {
     if (!currentUserID) return; 
     
@@ -662,8 +669,8 @@ async function saveUserData() {
     });
 
     const userData = {
-        userID: currentUserID,
-        playerName: playerName, // 🛑 NEW: Save the player name
+        userID: currentUserID, 
+        playerName: playerName, 
         balance: balance,
         bankBalance: bankBalance,
         currentLevel: currentLevel,
@@ -675,19 +682,19 @@ async function saveUserData() {
     };
 
     try {
-        await setDoc(doc(db, "players", currentUserID), userData);
+        await setDoc(doc(db, "players", String(currentUserID)), userData); 
         // console.log("User data saved successfully!");
     } catch (e) {
         console.error("Error saving document: ", e);
     }
 }
 
-/** Loads player data from Firestore or sets defaults. */
+/** Loads player data from Firestore. */
 async function loadUserData() {
     if (!currentUserID) return;
     
     try {
-        const docRef = doc(db, "players", currentUserID);
+        const docRef = doc(db, "players", String(currentUserID));
         const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
@@ -699,11 +706,8 @@ async function loadUserData() {
             lastSpinTime = data.lastSpinTime !== undefined ? data.lastSpinTime : 0;
             lastClaimTime = data.lastClaimTime !== undefined ? data.lastClaimTime : 0; 
             
-            // 🛑 NEW: Load or set default player name
-            const defaultName = `Player-${currentUserID.substring(0, 5)}`;
-            playerName = data.playerName !== undefined ? data.playerName : defaultName; 
+            playerName = data.playerName !== undefined ? data.playerName : `Trader ${currentUserID}`;
             
-            // Apply asset data
             if (data.assets) {
                 items.forEach(item => {
                     item.dataset.owned = data.assets[item.id] || 0;
@@ -711,9 +715,7 @@ async function loadUserData() {
             }
             
         } else {
-            // First time player - set default player name and save
-            playerName = `Player-${currentUserID.substring(0, 5)}`; // Set default name
-            console.log("New player! Setting default data.");
+            console.log("New player! Setting default data and saving.");
             await saveUserData();
         }
 
@@ -723,7 +725,9 @@ async function loadUserData() {
         checkTimeElapsedAndStartTimer();
         updateCryptoLock(); 
         updateStatusPopup(); 
-
+        
+        // 🛑 No longer displays Token/ID at the bottom left.
+        
     } catch (e) {
         console.error("Error loading document: ", e);
         renderItem(); 
@@ -731,8 +735,9 @@ async function loadUserData() {
 }
 
 
-/** Loads all player net worths for the leaderboard (Uses playerName now) */
+/** Loads all player net worths for the leaderboard */
 async function updateLeaderboard() {
+    // ... (Your existing leaderboard code using Firebase)
     const playersCol = collection(db, "players");
     const playerSnapshot = await getDocs(playersCol);
     
@@ -742,7 +747,7 @@ async function updateLeaderboard() {
         if (data.netWorth) {
             leaderboardData.push({
                 userID: data.userID,
-                playerName: data.playerName || `Player-${data.userID.substring(0, 5)}`, // 🛑 Use playerName or default
+                playerName: data.playerName || `Trader ${data.userID}`, 
                 netWorth: data.netWorth
             });
         }
@@ -768,7 +773,6 @@ async function updateLeaderboard() {
             itemDiv.style.backgroundColor = 'rgba(102, 194, 255, 0.1)'; 
         }
 
-        // 🛑 NEW: Display the stored playerName
         const displayID = player.playerName; 
 
         itemDiv.innerHTML = `
@@ -784,7 +788,17 @@ async function updateLeaderboard() {
     statusRankEl.textContent = playerRank;
 }
 
-// 🛑 ================= Account Status and Upgrade Logic (Unchanged) ================= 🛑
+// 🛑 ================= Sync Function (New) ================= 🛑
+
+/** Updates UI (Balances/Timers) and saves data every second. */
+function syncData() {
+    renderItem();           // Update Balances/Prices on UI
+    updateSpinCooldown();   // Update Spin Timer
+    checkTimeElapsedAndStartTimer(); // Update Reward Timer
+    saveUserData();         // Save everything to Firestore
+}
+
+// ================= Account Status and Upgrade Logic (Unchanged) ================= 
 
 // Helper function to close any popup by ID
 function closePopup(popupEl) {
@@ -910,6 +924,7 @@ function performUpgrade() {
 
         updateStatusPopup();
         renderItem(); 
+        saveUserData(); // Save after successful upgrade
         upgradeMsgEl.textContent = `Successfully upgraded to Level ${currentLevel}! 🎉`;
         upgradeMsgEl.style.color = '#00ffb3';
     } else {
@@ -949,7 +964,7 @@ function updateRewardTimer() {
     if (rewardSeconds <= 0) {
         rewardSeconds = 0;
         isClaimReady = true;
-        updateRewardTimer(); 
+        // updateRewardTimer(); // Don't call recursively
         return;
     }
 
@@ -959,17 +974,9 @@ function updateRewardTimer() {
 }
 
 function startRewardTimer(initialSeconds) {
-    if (rewardTimer) clearInterval(rewardTimer);
-    
+    // 🛑 No longer using an interval here, now part of syncData
     rewardSeconds = initialSeconds;
     isClaimReady = (rewardSeconds <= 0);
-
-    if (isClaimReady) {
-        updateRewardTimer();
-        return;
-    }
-
-    rewardTimer = setInterval(updateRewardTimer, 1000);
     updateRewardTimer(); 
 }
 
@@ -985,6 +992,7 @@ function claimTimeReward() {
     
     startRewardTimer(REWARD_INTERVAL);
     renderItem(); 
+    saveUserData(); // Save after claiming reward
 
     setTimeout(() => {
         closePopup(timeRewardPopup); 
@@ -995,7 +1003,7 @@ function checkTimeElapsedAndStartTimer() {
     const now = Date.now();
     
     if (lastClaimTime === 0) {
-        startRewardTimer(0);
+        if (!isClaimReady) startRewardTimer(0);
         return;
     }
 
@@ -1003,7 +1011,7 @@ function checkTimeElapsedAndStartTimer() {
     const timeRemaining = REWARD_INTERVAL - timeElapsedSeconds;
     
     if (timeRemaining <= 0) {
-        startRewardTimer(0);
+        if (!isClaimReady) startRewardTimer(0);
     } else {
         startRewardTimer(timeRemaining);
     }
@@ -1030,7 +1038,7 @@ leaderboardBtn.addEventListener("click", () => {
 });
 
 timeRewardBtn.addEventListener("click", () => {
-    checkTimeElapsedAndStartTimer(); 
+    // 🛑 We no longer call checkTimeElapsedAndStartTimer() here, as it runs every second in syncData.
     timeRewardPopup.style.display = "flex";
 });
 
@@ -1039,35 +1047,44 @@ claimRewardBtn.addEventListener("click", claimTimeReward);
 upgradeBtn.addEventListener("click", performUpgrade);
 
 
-// 🛑 ================= Startup and Authentication (New Firebase Flow) ================= 🛑
+// 🛑 ================= Startup and Authentication (Custom Token Flow) ================= 🛑
 
-function startGame(user) {
-    currentUserID = user.uid;
-    // 🛑 UPDATE: Display player name after loading (not just raw ID)
-    const defaultDisplay = `Player ID: ${user.uid.substring(0, 8)}...`;
-    userIDDisplayEl.textContent = defaultDisplay; 
+function startGame(token, pName) {
+    currentUserID = token;
+    playerName = pName;
     
     setInitialPrices(); 
     startAbuseCycle(); 
-
     loadUserData(); 
+    
+    // 🛑 Start 1-second sync engine 
+    if (syncEngine) clearInterval(syncEngine);
+    syncEngine = setInterval(syncData, 1000); 
 }
 
+/** Check if the player came from the login page using tempToken, or if they need to be redirected to login. */
 function initialSetup() {
-    onAuthStateChanged(auth, (user) => {
-        if (user) {
-            startGame(user);
-        } else {
-            signInAnonymously(auth)
-                .then((result) => {
-                    startGame(result.user);
-                })
-                .catch((error) => {
-                    console.error("Anonymous Sign-in failed:", error);
-                    userIDDisplayEl.textContent = "Error: Authentication Failed";
-                });
-        }
-    });
+    const tempToken = localStorage.getItem('tempToken'); 
+    const savedToken = localStorage.getItem('gameToken'); 
+    const tempName = localStorage.getItem('tempPlayerName');
+    
+    if (tempToken) {
+        const finalName = tempName || `Trader ${tempToken}`;
+        
+        localStorage.removeItem('tempToken');
+        localStorage.removeItem('tempPlayerName');
+        
+        startGame(tempToken, finalName);
+    } 
+    
+    else if (savedToken) {
+        // 🛑 Still redirecting to login to prevent auto-login, forcing user to use the token
+        window.location.replace('login.html');
+    }
+    
+    else {
+        window.location.replace('login.html');
+    }
 }
 
 initialSetup();
