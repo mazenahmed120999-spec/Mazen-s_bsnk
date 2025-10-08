@@ -190,9 +190,11 @@ body {
     // 🛑 ============== FIREBASE CONFIGURATION (MERGED) ============= 🛑
     // 🛑 ========================================================== 🛑
     
-    // استخدام اسم الدالة مباشرة من النطاق العام (Global Scope)
-    const { initializeApp } = firebase;
-    const { getFirestore, doc, getDoc } = firebase.firestore;
+    // تصحيح: يجب استخدام اسم الدالة مباشرة من كائن firebase.firestore
+    const initializeApp = firebase.initializeApp;
+    const getFirestore = firebase.firestore.getFirestore;
+    const doc = firebase.firestore.doc;
+    const getDoc = firebase.firestore.getDoc;
     
     // مفاتيح مشروعك الخاصة
     const firebaseConfig = {
