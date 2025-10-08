@@ -181,8 +181,29 @@ body {
 </div>
 
 <script type="module">
-    // 🛑 يتم استيراد Firebase بدون منطق احتياطي 
-    import { db, doc, getDoc } from './firebase-config.js';
+    // 🛑 ========================================================== 🛑
+    // 🛑 ============== FIREBASE CONFIGURATION (MERGED) ============= 🛑
+    // 🛑 ========================================================== 🛑
+
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.1.0/firebase-app.js";
+    import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.1.0/firebase-firestore.js";
+    
+    // مفاتيح مشروعك الخاصة (باستخدام المفاتيح التي أرسلتها سابقاً)
+    const firebaseConfig = {
+      apiKey: "AIzaSyD-g_PM12TgelGQn7npmYybpGfSxTuwpi0",
+      authDomain: "center-9ab44.firebaseapp.com",
+      projectId: "center-9ab44",
+      storageBucket: "center-9ab44.firebasestorage.app",
+      messagingSenderId: "342679917753",
+      appId: "1:342679917753:web:2aeb0ef2c90fc943a3b768",
+      measurementId: "G-S85P9EWGXM"
+    };
+
+    // تهيئة Firebase و Firestore
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // 🛑 =================== LOGIN PAGE LOGIC ======================= 🛑
     
     document.addEventListener('DOMContentLoaded', () => {
 
