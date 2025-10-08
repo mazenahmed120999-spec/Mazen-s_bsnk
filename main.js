@@ -1,6 +1,6 @@
-// main.js - The full script code (UPDATED FOR GITHUB/FIREBASE)
+// main.js - The full script code (FINAL VERSION FOR GITHUB/FIREBASE)
 
-// 🛑 Import Firebase modules and functions (ASSUMING SUCCESSFUL CONNECTION) 🛑
+// 🛑 Import Firebase modules and functions 🛑
 import { db, doc, setDoc, collection, getDocs, getDoc } from './firebase-config.js';
 
 document.addEventListener('gesturestart', e => e.preventDefault());
@@ -20,7 +20,7 @@ const priceTimerEl = document.getElementById('priceTimer');
 // Additional Elements
 const bankBtn = document.getElementById('bankButton');
 const spinBtn = document.getElementById('spinBtn');
-// 🛑 تم حذف userIDDisplayEl 🛑
+// 🛑 تم حذف userIDDisplayEl (تأكد من حذفه من index.html) 🛑
 
 // Leaderboard Elements
 const leaderboardBtn = document.getElementById('leaderboardBtn');
@@ -124,7 +124,7 @@ const withdrawBtn = document.getElementById('withdrawBtn');
 
 let selectedItem = null;
 let priceUpdateEngine; 
-let syncEngine; // 🛑 New engine for 1-second sync
+let syncEngine; // Engine for 0.5-second sync
 
 const normalRanges = {
   car: { min: -1000, max: 2000 },
@@ -203,7 +203,7 @@ function formatNumber(num) {
   return num.toString();
 }
 
-/** 🛑 Renders UI elements (Balances, Prices, Owned) but DOES NOT SAVE DATA. */
+/** 🛑 Renders UI elements (Balances, Prices, Owned). */
 function renderItem(item) {
     balanceEl.textContent = formatNumber(balance);
     bankBalanceDisplay.textContent = formatNumber(bankBalance);
@@ -219,8 +219,6 @@ function renderItem(item) {
             i.querySelector('.owned-val').textContent = i.dataset.owned;
         });
     }
-
-    // Call save data only from syncData or on major actions (like upgrade)
 }
 
 function randInt(min, max) {
@@ -298,7 +296,7 @@ function applyCooldown(button, duration = 2000) {
   }, duration);
 }
 
-// 🛑 ================= Buy/Sell/Trade (Unchanged) ================= 🛑
+// 🛑 ================= Buy/Sell/Trade (Unchanged, calls saveUserData) ================= 🛑
 buyBtn.addEventListener('click', () => {
     if (buyBtn.disabled) return;
     
@@ -415,7 +413,7 @@ tradeBtn.addEventListener('click', () => {
 });
 
 
-// ================= Bank/Spin (Unchanged) =================
+// ================= Bank/Spin (Unchanged, calls saveUserData) =================
 bankMaxBtn.addEventListener('click', () => {
     bankAmountInput.value = balance;
 });
@@ -494,8 +492,6 @@ function updateSpinCooldown() {
     spinWheelBtn.disabled = true;
     return remaining;
 }
-
-// setInterval(updateSpinCooldown, 1000); // 🛑 Moved to syncData
 
 function spinWheelAction() {
     if (isSpinning || updateSpinCooldown() > 0) {
@@ -644,7 +640,7 @@ function startAbuseCycle() {
 }
 
 
-// 🛑 ================= FIREBASE DATA MANAGEMENT (Updated for Token Login) ================= 🛑
+// 🛑 ================= FIREBASE DATA MANAGEMENT ================= 🛑
 
 function calculateNetWorth() {
     let totalAssetValue = 0;
@@ -659,7 +655,7 @@ function calculateNetWorth() {
     return playerNetWorth;
 }
 
-/** 🛑 Saves all player data and game state to Firestore. Called on major actions OR sync. */
+/** Saves all player data and game state to Firestore. Called on major actions OR sync. */
 async function saveUserData() {
     if (!currentUserID) return; 
     
@@ -726,8 +722,6 @@ async function loadUserData() {
         updateCryptoLock(); 
         updateStatusPopup(); 
         
-        // 🛑 No longer displays Token/ID at the bottom left.
-        
     } catch (e) {
         console.error("Error loading document: ", e);
         renderItem(); 
@@ -737,7 +731,6 @@ async function loadUserData() {
 
 /** Loads all player net worths for the leaderboard */
 async function updateLeaderboard() {
-    // ... (Your existing leaderboard code using Firebase)
     const playersCol = collection(db, "players");
     const playerSnapshot = await getDocs(playersCol);
     
@@ -788,11 +781,11 @@ async function updateLeaderboard() {
     statusRankEl.textContent = playerRank;
 }
 
-// 🛑 ================= Sync Function (New) ================= 🛑
+// 🛑 ================= Sync Function (Updated to 500ms) ================= 🛑
 
-/** Updates UI (Balances/Timers) and saves data every second. */
+/** Updates UI (Balances/Timers) and saves data every 500ms. */
 function syncData() {
-    renderItem();           // Update Balances/Prices on UI
+    renderItem();           // Update Balances/Prices/Owned on UI
     updateSpinCooldown();   // Update Spin Timer
     checkTimeElapsedAndStartTimer(); // Update Reward Timer
     saveUserData();         // Save everything to Firestore
@@ -955,7 +948,6 @@ function updateRewardTimer() {
         rewardTimerDisplay.textContent = "READY TO CLAIM!";
         claimRewardBtn.disabled = false;
         claimRewardBtn.classList.add('ready-to-claim');
-        if (rewardTimer) clearInterval(rewardTimer);
         return;
     }
     
@@ -964,7 +956,6 @@ function updateRewardTimer() {
     if (rewardSeconds <= 0) {
         rewardSeconds = 0;
         isClaimReady = true;
-        // updateRewardTimer(); // Don't call recursively
         return;
     }
 
@@ -974,7 +965,6 @@ function updateRewardTimer() {
 }
 
 function startRewardTimer(initialSeconds) {
-    // 🛑 No longer using an interval here, now part of syncData
     rewardSeconds = initialSeconds;
     isClaimReady = (rewardSeconds <= 0);
     updateRewardTimer(); 
@@ -1038,7 +1028,6 @@ leaderboardBtn.addEventListener("click", () => {
 });
 
 timeRewardBtn.addEventListener("click", () => {
-    // 🛑 We no longer call checkTimeElapsedAndStartTimer() here, as it runs every second in syncData.
     timeRewardPopup.style.display = "flex";
 });
 
@@ -1057,9 +1046,10 @@ function startGame(token, pName) {
     startAbuseCycle(); 
     loadUserData(); 
     
-    // 🛑 Start 1-second sync engine 
+    // 🛑 تم تغيير الفاصل الزمني للتحديث الدوري إلى 500 مللي ثانية (نصف ثانية) 🛑
+    const SYNC_INTERVAL_MS = 500; 
     if (syncEngine) clearInterval(syncEngine);
-    syncEngine = setInterval(syncData, 1000); 
+    syncEngine = setInterval(syncData, SYNC_INTERVAL_MS); 
 }
 
 /** Check if the player came from the login page using tempToken, or if they need to be redirected to login. */
@@ -1078,7 +1068,6 @@ function initialSetup() {
     } 
     
     else if (savedToken) {
-        // 🛑 Still redirecting to login to prevent auto-login, forcing user to use the token
         window.location.replace('login.html');
     }
     
