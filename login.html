@@ -181,7 +181,7 @@ body {
 </div>
 
 <script type="module">
-    // 🛑 يتم استيراد Firebase بدون منطق احتياطي 
+    // 🛑 تم تعديل الاستيراد ليتوافق مع طريقة Firebase
     import { db, doc, getDoc } from './firebase-config.js';
     
     document.addEventListener('DOMContentLoaded', () => {
@@ -248,13 +248,8 @@ body {
 
         // --- Create Token Logic (الآن يعتمد على Firebase) ---
         confirmNameBtn.addEventListener('click', async () => {
-            const playerName = nameInput.value.trim();
+            const playerName = nameInput.value.trim() || `Trader ${Math.floor(Math.random() * 1000)}`; // اسم افتراضي إذا ترك فارغاً
             nameErrorMsg.textContent = '';
-            
-            if (playerName === "") {
-                nameErrorMsg.textContent = 'Name is required to create a token!';
-                return;
-            }
             
             confirmNameBtn.disabled = true;
             confirmNameBtn.textContent = 'Generating...';
@@ -263,16 +258,21 @@ body {
                 // توليد توكن عشوائي والتحقق من أنه غير مستخدم في Firebase
                 let newToken;
                 let docSnap;
+                let attempts = 0;
+                const MAX_ATTEMPTS = 10;
                 
                 do {
                     newToken = Math.floor(Math.random() * 900) + 100; // 3 أرقام
                     const docRef = doc(db, "players", String(newToken));
                     docSnap = await getDoc(docRef);
+                    attempts++;
+                    if (attempts > MAX_ATTEMPTS) throw new Error("Could not find a unique token after multiple attempts.");
                 } while (docSnap.exists()); 
                 
                 newlyCreatedToken = String(newToken);
 
                 // حفظ الاسم والتوكن الجديد بشكل مؤقت للانتقال لـ main.js
+                // main.js سيقرأ هذا التوكن ويبدأ اللعبة به
                 localStorage.setItem('tempPlayerName', playerName);
                 localStorage.setItem('tempToken', newlyCreatedToken);
                 
@@ -281,7 +281,7 @@ body {
                 tokenMessagePopup.style.display = 'flex';
                 
             } catch (e) {
-                nameErrorMsg.textContent = 'Error connecting to Firebase or during token creation. Check console.';
+                nameErrorMsg.textContent = `Error: ${e.message || 'Error connecting to Firebase or during token creation.'}`;
                 console.error("Error creating token: ", e);
             } finally {
                  confirmNameBtn.disabled = false;
@@ -291,10 +291,10 @@ body {
         
         startPlayingBtn.addEventListener('click', () => {
             if (newlyCreatedToken) {
-                // حفظ التوكن بشكل دائم (سواء كان جديداً أو تمت إزالته من قبل)
-                localStorage.setItem('gameToken', newlyCreatedToken); 
+                // ليس بالضرورة حفظه هنا، لأن main.js سيقوم بحفظه كـ gameToken بعد بدء اللعبة بنجاح
             }
-            window.location.href = 'index.html';
+            // التوجيه لصفحة اللعبة
+            window.location.replace('index.html'); 
         });
 
 
@@ -303,8 +303,8 @@ body {
             const token = tokenInput.value.trim();
             tokenErrorMsg.textContent = ''; 
             
-            if (token.length !== 3 || isNaN(parseInt(token))) {
-                tokenErrorMsg.textContent = 'Please enter a valid 3-digit Token.';
+            if (token.length !== 3 || isNaN(parseInt(token)) || parseInt(token) < 100) {
+                tokenErrorMsg.textContent = 'Please enter a valid 3-digit Token (100-999).';
                 return;
             }
 
@@ -318,14 +318,12 @@ body {
                 if (docSnap.exists()) {
                     const playerData = docSnap.data();
                     
-                    // حفظ التوكن بشكل دائم
-                    localStorage.setItem('gameToken', token);
-                    
                     // حفظ البيانات المؤقتة للتحويل إلى main.js
                     localStorage.setItem('tempToken', token);
                     localStorage.setItem('tempPlayerName', playerData.playerName || `Trader ${token}`);
                     
-                    window.location.href = 'index.html';
+                    // التوجيه لصفحة اللعبة
+                    window.location.replace('index.html');
                 
                 } else {
                     // إذا لم تجد Firebase التوكن
@@ -342,6 +340,14 @@ body {
                 confirmTokenBtn.textContent = 'Confirm';
             }
         });
+        
+        // التحقق عند تحميل الصفحة إذا كان هناك GameToken محفوظ
+        const savedToken = localStorage.getItem('gameToken');
+        if (savedToken) {
+            haveTokenBtn.textContent = `🔑 Continue with Token: ${savedToken}`;
+            haveTokenBtn.click(); // فتح نافذة الإدخال تلقائياً
+            tokenInput.value = savedToken; // ملء التوكن المحفوظ
+        }
     });
 </script>
 
