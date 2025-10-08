@@ -5,6 +5,36 @@ import { db, doc, setDoc, collection, getDocs, getDoc } from './firebase-config.
 
 document.addEventListener('gesturestart', e => e.preventDefault());
 
+// ----------------- Create Loading Screen POPUP (NEW) -----------------
+const loadingPopup = document.createElement('div');
+loadingPopup.className = 'popup-overlay';
+loadingPopup.id = 'loadingPopup';
+loadingPopup.style.display = 'flex'; // Show by default until setup is complete
+loadingPopup.innerHTML = `
+<div class="popup" style="text-align: center; padding: 30px; border-radius: 15px;">
+  <h2 style="color: #00ffb3;">Checking Data...</h2> 
+  <p style="color: #fff;">Connecting to Firebase and synchronizing the latest balance.</p>
+  <div class="spinner"></div> 
+  <style>
+    .spinner {
+      border: 4px solid rgba(255, 255, 255, 0.3);
+      border-top: 4px solid #00ffb3;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 20px auto 0;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</div>
+`;
+document.body.appendChild(loadingPopup);
+
+// ----------------- Standard Elements -----------------
 const items = Array.from(document.querySelectorAll('.item'));
 const balanceEl = document.getElementById('balance');
 const amountInput = document.getElementById('amount');
@@ -20,7 +50,6 @@ const priceTimerEl = document.getElementById('priceTimer');
 // Additional Elements
 const bankBtn = document.getElementById('bankButton');
 const spinBtn = document.getElementById('spinBtn');
-// 🛑 تم حذف userIDDisplayEl 🛑
 
 // Leaderboard Elements
 const leaderboardBtn = document.getElementById('leaderboardBtn');
@@ -114,6 +143,7 @@ let lastSpinTime = 0;
 let lastClaimTime = 0; 
 let playerNetWorth = 0; 
 let playerRank = 'N/A'; 
+let isLoadingData = true; // 🛑 NEW STATE VARIABLE
 
 // Bank Elements
 const bankAmountInput = document.getElementById('bankAmount');
@@ -300,7 +330,7 @@ function applyCooldown(button, duration = 2000) {
 
 // 🛑 ================= Buy/Sell/Trade (Unchanged) ================= 🛑
 buyBtn.addEventListener('click', () => {
-    if (buyBtn.disabled) return;
+    if (buyBtn.disabled || isLoadingData) return; // Prevent action while loading
     
     if (!selectedItem) return flashButton(buyBtn, '❌', 'red');
     const qty = parseInt(amountInput.value, 10);
@@ -334,7 +364,7 @@ buyBtn.addEventListener('click', () => {
 });
 
 sellBtn.addEventListener('click', () => {
-  if (sellBtn.disabled) return;
+  if (sellBtn.disabled || isLoadingData) return; // Prevent action while loading
   
   if (!selectedItem) return flashButton(sellBtn, '❌', 'red');
   const qty = parseInt(amountInput.value, 10);
@@ -360,7 +390,7 @@ sellBtn.addEventListener('click', () => {
 tradeInput.value = 50000;
 
 tradeBtn.addEventListener('click', () => {
-  if (tradeBtn.disabled) return;
+  if (tradeBtn.disabled || isLoadingData) return; // Prevent action while loading
   
   tradeBtn.disabled = true;
   setTimeout(() => {
@@ -421,6 +451,7 @@ bankMaxBtn.addEventListener('click', () => {
 });
 
 depositBtn.addEventListener('click', () => {
+    if (isLoadingData) return; // Prevent action while loading
     const amount = parseInt(bankAmountInput.value);
     
     if (amount <= 0 || isNaN(amount)) {
@@ -441,6 +472,7 @@ depositBtn.addEventListener('click', () => {
 });
 
 withdrawBtn.addEventListener('click', () => {
+    if (isLoadingData) return; // Prevent action while loading
     const amount = parseInt(bankAmountInput.value);
 
     if (amount <= 0 || isNaN(amount)) {
@@ -462,6 +494,7 @@ withdrawBtn.addEventListener('click', () => {
 
 
 bankBtn.addEventListener("click", () => {
+  if (isLoadingData) return;
   document.getElementById('bankPopup').style.display = "flex";
   renderItem();
 });
@@ -498,7 +531,7 @@ function updateSpinCooldown() {
 // setInterval(updateSpinCooldown, 1000); // 🛑 Moved to syncData
 
 function spinWheelAction() {
-    if (isSpinning || updateSpinCooldown() > 0) {
+    if (isSpinning || updateSpinCooldown() > 0 || isLoadingData) {
         return;
     }
     
@@ -556,6 +589,7 @@ function spinWheelAction() {
 spinWheelBtn.addEventListener('click', spinWheelAction);
 
 spinBtn.addEventListener("click", () => {
+  if (isLoadingData) return;
   spinPopup.style.display = "flex";
   updateSpinCooldown(); 
   renderItem();
@@ -689,13 +723,14 @@ async function saveUserData() {
     }
 }
 
-/** Loads player data from Firestore. */
+/** 🛑 Loads player data from Firestore, FORCING SERVER FETCH. */
 async function loadUserData() {
     if (!currentUserID) return;
     
     try {
         const docRef = doc(db, "players", String(currentUserID));
-        const docSnap = await getDoc(docRef);
+        // 🛑 NEW: Add source: 'server' to bypass local cache
+        const docSnap = await getDoc(docRef, { source: 'server' }); 
 
         if (docSnap.exists()) {
             const data = docSnap.data();
@@ -726,11 +761,19 @@ async function loadUserData() {
         updateCryptoLock(); 
         updateStatusPopup(); 
         
-        // 🛑 No longer displays Token/ID at the bottom left.
-        
+        // 🛑 Hide the loading screen AFTER successful data load
+        loadingPopup.style.display = 'none';
+        isLoadingData = false;
+
     } catch (e) {
         console.error("Error loading document: ", e);
-        renderItem(); 
+        // 🛑 Handle error: Show error and re-direct if needed
+        loadingPopup.querySelector('h2').textContent = "Connection Error ❌";
+        loadingPopup.querySelector('p').textContent = "Failed to synchronize data. Check network or refresh.";
+        loadingPopup.querySelector('.spinner').style.display = 'none';
+        
+        // Optionally, redirect back to login or show an error screen
+        // window.location.replace('login.html'); 
     }
 }
 
@@ -900,6 +943,7 @@ function updateUpgradeRequirements() {
 }
 
 function performUpgrade() {
+    if (isLoadingData) return; // Prevent action while loading
     const nextLevel = currentLevel + 1;
     if (nextLevel > 10) return;
 
@@ -981,7 +1025,7 @@ function startRewardTimer(initialSeconds) {
 }
 
 function claimTimeReward() {
-    if (!isClaimReady) return; 
+    if (!isClaimReady || isLoadingData) return; // Prevent action while loading
 
     balance += REWARD_AMOUNT;
     
@@ -1028,16 +1072,19 @@ document.getElementById('closeSpinPopup').addEventListener('click', () => closeP
 
 
 statusBtn.addEventListener("click", () => {
+    if (isLoadingData) return;
     updateStatusPopup(); 
     statusPopup.style.display = "flex";
 });
 
 leaderboardBtn.addEventListener("click", () => {
+    if (isLoadingData) return;
     updateLeaderboard(); 
     leaderboardPopup.style.display = "flex";
 });
 
 timeRewardBtn.addEventListener("click", () => {
+    if (isLoadingData) return;
     // 🛑 We no longer call checkTimeElapsedAndStartTimer() here, as it runs every second in syncData.
     timeRewardPopup.style.display = "flex";
 });
@@ -1047,17 +1094,19 @@ claimRewardBtn.addEventListener("click", claimTimeReward);
 upgradeBtn.addEventListener("click", performUpgrade);
 
 
-// 🛑 ================= Startup and Authentication (Custom Token Flow) ================= 🛑
+// 🛑 ================= Startup and Authentication (Custom Token Flow - MODIFIED) ================= 🛑
 
-function startGame(token, pName) {
+async function startGame(token, pName) {
     currentUserID = token;
     playerName = pName;
     
     setInitialPrices(); 
     startAbuseCycle(); 
-    loadUserData(); 
     
-    // 🛑 Start 1-second sync engine 
+    // 🛑 Load data and WAIT until it's done before continuing
+    await loadUserData(); 
+    
+    // 🛑 Start 1-second sync engine ONLY AFTER successful load
     if (syncEngine) clearInterval(syncEngine);
     syncEngine = setInterval(syncData, 1000); 
 }
@@ -1074,6 +1123,7 @@ function initialSetup() {
         localStorage.removeItem('tempToken');
         localStorage.removeItem('tempPlayerName');
         
+        // 🛑 Start the game and the checking process
         startGame(tempToken, finalName);
     } 
     
