@@ -1057,9 +1057,9 @@ function startGame(token, pName) {
     startAbuseCycle(); 
     loadUserData(); 
     
-    // 🛑 Start 1-second sync engine 
+    // 🛑 Start 100ms sync engine (Fastest possible, WARNING: High Firebase usage)
     if (syncEngine) clearInterval(syncEngine);
-    syncEngine = setInterval(syncData, 1000); 
+    syncEngine = setInterval(syncData, 100); 
 }
 
 /** Check if the player came from the login page using tempToken, or if they need to be redirected to login. */
