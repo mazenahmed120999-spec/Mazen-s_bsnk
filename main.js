@@ -1,10 +1,63 @@
-// main.js - The full script code (UPDATED FOR GITHUB/FIREBASE)
+// main.js - The full script code (V4: FINAL, Merged Firebase Config & Fixed Loading)
 
-// 🛑 Import Firebase modules and functions (ASSUMING SUCCESSFUL CONNECTION) 🛑
-import { db, doc, setDoc, collection, getDocs, getDoc } from './firebase-config.js';
+// 🛑 ========================================================== 🛑
+// 🛑 ============== FIREBASE CONFIGURATION (MERGED) ============= 🛑
+// 🛑 ========================================================== 🛑
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.1.0/firebase-app.js";
+// تم إضافة updateDoc و onSnapshot هنا للعمل مع السوق الموحد
+import { getFirestore, doc, setDoc, updateDoc, collection, getDocs, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/9.1.0/firebase-firestore.js";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.1.0/firebase-auth.js";
+
+// مفاتيح مشروعك الخاصة
+const firebaseConfig = {
+  apiKey: "AIzaSyD-g_PM12TgelGQn7npmYybpGfSxTuwpi0",
+  authDomain: "center-9ab44.firebaseapp.com",
+  projectId: "center-9ab44",
+  storageBucket: "center-9ab44.firebasestorage.app",
+  messagingSenderId: "342679917753",
+  appId: "1:342679917753:web:2aeb0ef2c90fc943a3b768",
+  measurementId: "G-S85P9EWGXM"
+};
+
+// تهيئة Firebase
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+
 
 document.addEventListener('gesturestart', e => e.preventDefault());
 
+// ----------------- Create Loading Screen POPUP (NEW) -----------------
+const loadingPopup = document.createElement('div');
+loadingPopup.className = 'popup-overlay';
+loadingPopup.id = 'loadingPopup';
+loadingPopup.style.display = 'flex'; // Show by default until setup is complete
+loadingPopup.innerHTML = `
+<div class="popup" style="text-align: center; padding: 30px; border-radius: 15px;">
+  <h2 style="color: #00ffb3;">Checking Data...</h2> 
+  <p style="color: #fff;">Connecting to Firebase and synchronizing the latest balance.</p>
+  <div class="spinner"></div> 
+  <style>
+    .spinner {
+      border: 4px solid rgba(255, 255, 255, 0.3);
+      border-top: 4px solid #00ffb3;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 20px auto 0;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</div>
+`;
+document.body.appendChild(loadingPopup);
+
+// ----------------- Standard Elements -----------------
 const items = Array.from(document.querySelectorAll('.item'));
 const balanceEl = document.getElementById('balance');
 const amountInput = document.getElementById('amount');
@@ -20,7 +73,6 @@ const priceTimerEl = document.getElementById('priceTimer');
 // Additional Elements
 const bankBtn = document.getElementById('bankButton');
 const spinBtn = document.getElementById('spinBtn');
-// 🛑 تم حذف userIDDisplayEl 🛑
 
 // Leaderboard Elements
 const leaderboardBtn = document.getElementById('leaderboardBtn');
@@ -28,7 +80,7 @@ const leaderboardPopup = document.getElementById('leaderboardPopup');
 const leaderboardList = document.getElementById('leaderboardList');
 const myNetWorthEl = document.getElementById('myNetWorth');
 
-// 🛑 Status and Upgrade System Elements 
+// Status and Upgrade System Elements 
 const statusBtn = document.getElementById('statusBtn');
 const statusPopup = document.getElementById('statusPopup');
 const levelsTrack = document.getElementById('levelsTrack');
@@ -50,7 +102,7 @@ const maxCryptoEl = document.getElementById('maxCrypto');
 const statusBankBalanceEl = document.getElementById('statusBankBalance');
 const statusRankEl = document.getElementById('statusRank');
 
-// 🛑 Time Reward Elements
+// Time Reward Elements
 const timeRewardBtn = document.getElementById('timeRewardBtn');
 const timeRewardPopup = document.getElementById('timeRewardPopup');
 const rewardTimerDisplay = document.getElementById('rewardTimerDisplay');
@@ -114,6 +166,7 @@ let lastSpinTime = 0;
 let lastClaimTime = 0; 
 let playerNetWorth = 0; 
 let playerRank = 'N/A'; 
+let isLoadingData = true; // 🛑 مهم: يمنع التفاعل حتى يتم التحميل بالكامل
 
 // Bank Elements
 const bankAmountInput = document.getElementById('bankAmount');
@@ -123,8 +176,12 @@ const depositBtn = document.getElementById('depositBtn');
 const withdrawBtn = document.getElementById('withdrawBtn');
 
 let selectedItem = null;
-let priceUpdateEngine; 
-let syncEngine; // 🛑 New engine for 1-second sync
+let syncEngine; 
+
+// 🛑 MARKET SYNC VARIABLES 
+let marketPrices = {}; // Prices synchronized from Firebase
+let isAbuseMode = false;
+let marketLastUpdate = 0; // Timestamp of the last market data update
 
 const normalRanges = {
   car: { min: -1000, max: 2000 },
@@ -142,7 +199,12 @@ const abuseRanges = {
   crypto: { min: -200000, max: 2000000 }
 };
 
-let currentRanges = { ...normalRanges };
+const MARKET_DOC_ID = "main_market";
+const PRICE_UPDATE_INTERVAL_NORMAL = 60; // 60 seconds
+const PRICE_UPDATE_INTERVAL_ABUSE = 5; // 5 seconds
+const ABUSE_DURATION = 60; // 60 seconds
+const NORMAL_DURATION = 240; // 240 seconds
+
 
 // 🛑 Level Variables and Constraints (Unchanged)
 const BASE_LIMITS = {
@@ -188,11 +250,12 @@ function setInitialPrices() {
     };
 
     items.forEach(item => {
-        if (parseInt(item.dataset.price, 10) === 0 || isNaN(parseInt(item.dataset.price, 10))) {
-            item.dataset.price = initialPrices[item.id];
+        if (marketPrices[item.id] === undefined) {
+             marketPrices[item.id] = initialPrices[item.id];
         }
     });
     
+    updatePricesUI();
     updateCryptoLock();
 }
 
@@ -203,39 +266,41 @@ function formatNumber(num) {
   return num.toString();
 }
 
-/** 🛑 Renders UI elements (Balances, Prices, Owned) but DOES NOT SAVE DATA. */
-function renderItem(item) {
+/** 🛑 Updates Prices and Balances on the UI from the marketPrices state. */
+function updatePricesUI() {
     balanceEl.textContent = formatNumber(balance);
     bankBalanceDisplay.textContent = formatNumber(bankBalance);
     
-    if (item) {
-        const price = parseInt(item.dataset.price, 10);
-        const owned = parseInt(item.dataset.owned, 10);
+    items.forEach(item => {
+        const itemID = item.id;
+        // نستخدم السعر المُتزامن فقط
+        const price = marketPrices[itemID] || parseInt(item.dataset.price, 10); 
+        
+        item.dataset.price = price;
         item.querySelector('.price-val').textContent = formatNumber(price);
-        item.querySelector('.owned-val').textContent = owned;
-    } else {
-        items.forEach(i => {
-            i.querySelector('.price-val').textContent = formatNumber(parseInt(i.dataset.price, 10));
-            i.querySelector('.owned-val').textContent = i.dataset.owned;
-        });
-    }
+        item.querySelector('.owned-val').textContent = item.dataset.owned;
+    });
 
-    // Call save data only from syncData or on major actions (like upgrade)
 }
 
 function randInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-function updatePrices() {
-  items.forEach(item => {
-    let price = parseInt(item.dataset.price, 10);
-    const range = currentRanges[item.id];
-    const change = randInt(range.min, range.max);
-    price = Math.max(10, price + change);
-    item.dataset.price = Math.round(price);
-    renderItem(item); // Renders price to UI
-  });
+/** 🛑 Calculates NEW prices based on current mode/ranges. */
+function calculateNewPrices() {
+    const ranges = isAbuseMode ? abuseRanges : normalRanges;
+    const newPrices = {};
+
+    items.forEach(item => {
+        let price = marketPrices[item.id];
+        const range = ranges[item.id];
+        const change = randInt(range.min, range.max);
+        price = Math.max(10, price + change);
+        newPrices[item.id] = Math.round(price);
+    });
+
+    return newPrices;
 }
 
 function updateCryptoLock() {
@@ -286,7 +351,6 @@ function flashButton(btn, symbol, color, duration = 1500) {
   }, duration);
 }
 
-// ================= Cooldown Function (Unchanged) =================
 function applyCooldown(button, duration = 2000) {
   button.disabled = true;
   setTimeout(() => {
@@ -298,18 +362,21 @@ function applyCooldown(button, duration = 2000) {
   }, duration);
 }
 
-// 🛑 ================= Buy/Sell/Trade (Unchanged) ================= 🛑
+
+// 🛑 ================= Buy/Sell/Trade (Uses marketPrices) ================= 🛑
 buyBtn.addEventListener('click', () => {
-    if (buyBtn.disabled) return;
+    // 🛑 الشرط المُصحح ليتوقف عند التحميل فقط
+    if (buyBtn.disabled || isLoadingData) return; 
     
     if (!selectedItem) return flashButton(buyBtn, '❌', 'red');
     const qty = parseInt(amountInput.value, 10);
     if (!qty || qty <= 0) return flashButton(buyBtn, '❌', 'red');
 
     const itemID = selectedItem.id;
-    const price = parseInt(selectedItem.dataset.price, 10) * qty;
-    let owned = parseInt(selectedItem.dataset.owned, 10);
+    const price = marketPrices[itemID] || parseInt(selectedItem.dataset.price, 10); 
+    const totalPrice = price * qty; 
     
+    let owned = parseInt(selectedItem.dataset.owned, 10);
     const maxLimit = getAssetLimit(itemID);
     
     if (owned + qty > maxLimit) {
@@ -319,12 +386,12 @@ buyBtn.addEventListener('click', () => {
         return;
     }
     
-    if (balance >= price) {
-        balance -= price;
+    if (balance >= totalPrice) {
+        balance -= totalPrice;
         owned += qty;
         selectedItem.dataset.owned = owned;
-        renderItem(selectedItem); 
-        saveUserData(); // Save after successful transaction
+        updatePricesUI(); 
+        saveUserData(); 
         flashButton(buyBtn, '✅', '#00ffb3');
         applyCooldown(buyBtn);
     } else {
@@ -334,7 +401,7 @@ buyBtn.addEventListener('click', () => {
 });
 
 sellBtn.addEventListener('click', () => {
-  if (sellBtn.disabled) return;
+  if (sellBtn.disabled || isLoadingData) return;
   
   if (!selectedItem) return flashButton(sellBtn, '❌', 'red');
   const qty = parseInt(amountInput.value, 10);
@@ -347,12 +414,14 @@ sellBtn.addEventListener('click', () => {
     return;
   }
   
-  const price = parseInt(selectedItem.dataset.price, 10) * qty;
+  const price = marketPrices[selectedItem.id] || parseInt(selectedItem.dataset.price, 10); 
+  const totalPrice = price * qty;
+
   owned -= qty;
-  balance += price;
+  balance += totalPrice;
   selectedItem.dataset.owned = owned;
-  renderItem(selectedItem); 
-  saveUserData(); // Save after successful transaction
+  updatePricesUI(); 
+  saveUserData(); 
   flashButton(sellBtn, '✅', '#00ffb3');
   applyCooldown(sellBtn);
 });
@@ -360,7 +429,7 @@ sellBtn.addEventListener('click', () => {
 tradeInput.value = 50000;
 
 tradeBtn.addEventListener('click', () => {
-  if (tradeBtn.disabled) return;
+  if (tradeBtn.disabled || isLoadingData) return;
   
   tradeBtn.disabled = true;
   setTimeout(() => {
@@ -402,8 +471,8 @@ tradeBtn.addEventListener('click', () => {
       const perc = Math.floor(Math.random() * 91) - 30; 
       const gain = Math.round(tradeAmt * perc / 100);
       balance += gain;
-      renderItem(selectedItem || items[0]); 
-      saveUserData(); // Save after successful transaction
+      updatePricesUI(); 
+      saveUserData(); 
       
       tradeBtn.textContent = `${perc >= 0 ? '+' : ''}${perc}% → ${gain >= 0 ? '+' : ''}${formatNumber(gain)}$`;
       
@@ -421,6 +490,7 @@ bankMaxBtn.addEventListener('click', () => {
 });
 
 depositBtn.addEventListener('click', () => {
+    if (isLoadingData) return; 
     const amount = parseInt(bankAmountInput.value);
     
     if (amount <= 0 || isNaN(amount)) {
@@ -432,8 +502,8 @@ depositBtn.addEventListener('click', () => {
         balance -= amount;
         bankBalance += amount;
         bankAmountInput.value = 0; 
-        renderItem(); 
-        saveUserData(); // Save after successful transaction
+        updatePricesUI(); 
+        saveUserData(); 
         flashButton(depositBtn, '✅', '#00ffb3');
     } else {
         flashButton(depositBtn, '❌', 'red');
@@ -441,6 +511,7 @@ depositBtn.addEventListener('click', () => {
 });
 
 withdrawBtn.addEventListener('click', () => {
+    if (isLoadingData) return; 
     const amount = parseInt(bankAmountInput.value);
 
     if (amount <= 0 || isNaN(amount)) {
@@ -452,18 +523,18 @@ withdrawBtn.addEventListener('click', () => {
         bankBalance -= amount;
         balance += amount;
         bankAmountInput.value = 0; 
-        renderItem(); 
-        saveUserData(); // Save after successful transaction
+        updatePricesUI(); 
+        saveUserData(); 
         flashButton(withdrawBtn, '✅', '#00ffb3');
     } else {
         flashButton(withdrawBtn, '❌', 'red');
     }
 });
 
-
 bankBtn.addEventListener("click", () => {
+  if (isLoadingData) return;
   document.getElementById('bankPopup').style.display = "flex";
-  renderItem();
+  updatePricesUI();
 });
 
 const SPIN_COOLDOWN = 600; 
@@ -495,10 +566,8 @@ function updateSpinCooldown() {
     return remaining;
 }
 
-// setInterval(updateSpinCooldown, 1000); // 🛑 Moved to syncData
-
 function spinWheelAction() {
-    if (isSpinning || updateSpinCooldown() > 0) {
+    if (isSpinning || updateSpinCooldown() > 0 || isLoadingData) {
         return;
     }
     
@@ -532,8 +601,8 @@ function spinWheelAction() {
         
         if (finalSegment) {
             balance += gain;
-            renderItem(); 
-            saveUserData(); // Save after successful spin
+            updatePricesUI(); 
+            saveUserData(); 
             spinResultEl.textContent = `${finalSegment.text}! You won ${formatNumber(gain)}$`;
             spinResultEl.style.color = finalSegment.color;
         } else {
@@ -556,101 +625,80 @@ function spinWheelAction() {
 spinWheelBtn.addEventListener('click', spinWheelAction);
 
 spinBtn.addEventListener("click", () => {
+  if (isLoadingData) return;
   spinPopup.style.display = "flex";
   updateSpinCooldown(); 
-  renderItem();
+  updatePricesUI();
 });
 
 
-// ================= Mazen’s Abuse Timer (Unchanged) =================
+// ================= Mazen’s Abuse Timer (Synced) =================
 
-let abuseCycleInterval; 
-
-const NORMAL_UPDATE_SPEED = 60000; 
-const ABUSE_UPDATE_SPEED = 5000; 
-let priceTimerSeconds = NORMAL_UPDATE_SPEED / 1000; 
-
-function setPriceUpdateEngine(intervalMs) {
-    if (priceUpdateEngine) clearInterval(priceUpdateEngine);
-    updatePrices(); 
-    priceUpdateEngine = setInterval(updatePrices, intervalMs);
+function formatTime(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
 }
 
-function updatePriceTimerDisplay() {
-    const mins = Math.floor(priceTimerSeconds / 60);
-    const secs = priceTimerSeconds % 60;
-    priceTimerEl.textContent = `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
-}
+/** 🛑 Updates the visual timer for Abuse Mode / Price Update */
+function updateMarketTimers(lastUpdate, isAbuse, cycleStartTime) {
+    const now = Date.now();
+    const elapsedSinceCycleStart = Math.floor((now - cycleStartTime) / 1000);
+    const elapsedSinceUpdate = Math.floor((now - lastUpdate) / 1000);
+    
+    let updateInterval;
+    let cycleDuration;
+    
+    // 1. Price Update Timer (The small timer)
+    if (isAbuse) {
+        updateInterval = PRICE_UPDATE_INTERVAL_ABUSE;
+        priceTimerEl.textContent = "Mazen’s Abuse 🔥";
+    } else {
+        updateInterval = PRICE_UPDATE_INTERVAL_NORMAL;
+        const nextPriceUpdate = updateInterval - (elapsedSinceUpdate % updateInterval);
+        priceTimerEl.textContent = formatTime(nextPriceUpdate);
+    }
 
-function startAbuseCycle() {
-    const normalCycleTimeInitial = 240; 
-    const abuseDuration = 60; 
-    
-    if (abuseCycleInterval) clearInterval(abuseCycleInterval);
-    
-    let timerState = 'normal';
-    let timerSeconds = normalCycleTimeInitial;
-    
-    currentRanges = { ...normalRanges };
-    abuseBox.classList.remove('active');
-    
-    const initialMins = Math.floor(normalCycleTimeInitial / 60);
-    const initialSecs = normalCycleTimeInitial % 60;
-    abuseTimerEl.textContent = `${initialMins < 10 ? '0' : ''}${initialMins}:${initialSecs < 10 ? '0' : ''}${initialSecs}`;
-
-    priceTimerSeconds = NORMAL_UPDATE_SPEED / 1000;
-    updatePriceTimerDisplay(); 
-    
-    setPriceUpdateEngine(NORMAL_UPDATE_SPEED);
-    
-    abuseCycleInterval = setInterval(() => {
-        timerSeconds--;
+    // 2. Abuse Cycle Timer (The big timer)
+    if (isAbuse) {
+        // If in Abuse Mode, the timer should count down the remaining Abuse time
+        cycleDuration = ABUSE_DURATION;
+        const remainingAbuseTime = ABUSE_DURATION - (elapsedSinceCycleStart % (NORMAL_DURATION + ABUSE_DURATION));
         
-        const mins = Math.floor(timerSeconds / 60);
-        const secs = timerSeconds % 60;
-        abuseTimerEl.textContent = `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
-
-        if (timerState === 'normal') {
-             priceTimerSeconds--;
-             if (priceTimerSeconds < 0) {
-                 priceTimerSeconds = NORMAL_UPDATE_SPEED / 1000; 
-             }
-             updatePriceTimerDisplay();
-
+        if (remainingAbuseTime > 0) {
+            abuseTimerEl.textContent = formatTime(remainingAbuseTime);
+            abuseBox.classList.add('active');
         } else {
-             priceTimerEl.textContent = "Mazen’s Abuse 🔥"; 
+             // Should not happen, but for safety
+             abuseTimerEl.textContent = formatTime(0);
+             abuseBox.classList.remove('active');
         }
 
-        if (timerSeconds < 0) {
-            if (timerState === 'normal') {
-                timerState = 'abuse';
-                timerSeconds = abuseDuration;
-                currentRanges = { ...abuseRanges };
-                abuseBox.classList.add('active');
-                setPriceUpdateEngine(ABUSE_UPDATE_SPEED);
-                priceTimerEl.textContent = "Mazen’s Abuse 🔥";
-            } else {
-                timerState = 'normal';
-                timerSeconds = normalCycleTimeInitial;
-                currentRanges = { ...normalRanges };
-                abuseBox.classList.remove('active');
-                setPriceUpdateEngine(NORMAL_UPDATE_SPEED);
-                
-                priceTimerSeconds = NORMAL_UPDATE_SPEED / 1000; 
-                updatePriceTimerDisplay();
-            }
+    } else {
+        // If in Normal Mode, the timer should count down the remaining Normal time
+        cycleDuration = NORMAL_DURATION;
+        // Total Cycle Time - (Elapsed time since the start of the current normal cycle)
+        const timeSinceNormalStart = elapsedSinceCycleStart % (NORMAL_DURATION + ABUSE_DURATION);
+        const remainingNormalTime = NORMAL_DURATION - timeSinceNormalStart;
+        
+        if (remainingNormalTime > 0) {
+             abuseTimerEl.textContent = formatTime(remainingNormalTime);
+             abuseBox.classList.remove('active');
+        } else {
+             // This means we are in the ABUSE phase (the listener should correct this)
+             abuseTimerEl.textContent = formatTime(ABUSE_DURATION); 
         }
-    }, 1000);
+    }
 }
 
 
-// 🛑 ================= FIREBASE DATA MANAGEMENT (Updated for Token Login) ================= 🛑
+// 🛑 ================= FIREBASE DATA MANAGEMENT (MODIFIED) ================= 🛑
 
 function calculateNetWorth() {
     let totalAssetValue = 0;
     
     items.forEach(item => {
-        const price = parseInt(item.dataset.price, 10);
+        const price = marketPrices[item.id] || parseInt(item.dataset.price, 10); 
         const owned = parseInt(item.dataset.owned, 10); 
         totalAssetValue += price * owned;
     });
@@ -659,7 +707,8 @@ function calculateNetWorth() {
     return playerNetWorth;
 }
 
-/** 🛑 Saves all player data and game state to Firestore. Called on major actions OR sync. */
+
+/** Saves all player data and game state to Firestore. Called on major actions OR sync. */
 async function saveUserData() {
     if (!currentUserID) return; 
     
@@ -683,7 +732,6 @@ async function saveUserData() {
 
     try {
         await setDoc(doc(db, "players", String(currentUserID)), userData); 
-        // console.log("User data saved successfully!");
     } catch (e) {
         console.error("Error saving document: ", e);
     }
@@ -695,7 +743,7 @@ async function loadUserData() {
     
     try {
         const docRef = doc(db, "players", String(currentUserID));
-        const docSnap = await getDoc(docRef);
+        const docSnap = await getDoc(docRef, { source: 'server' }); 
 
         if (docSnap.exists()) {
             const data = docSnap.data();
@@ -719,25 +767,29 @@ async function loadUserData() {
             await saveUserData();
         }
 
-        // Final setup after loading/setting defaults
-        renderItem(); 
-        updateSpinCooldown(); 
-        checkTimeElapsedAndStartTimer();
         updateCryptoLock(); 
         updateStatusPopup(); 
         
-        // 🛑 No longer displays Token/ID at the bottom left.
-        
+        // 🛑 Hide the loading screen AFTER successful data load
+        loadingPopup.style.display = 'none';
+        isLoadingData = false; // 🛑 **الإصلاح النهائي: يتم تشغيل الأزرار الآن**
+
     } catch (e) {
         console.error("Error loading document: ", e);
-        renderItem(); 
+        // ... (Error handling remains the same) ...
+        loadingPopup.querySelector('h2').textContent = "Connection Error ❌";
+        loadingPopup.querySelector('p').textContent = "Failed to synchronize data. Check network or refresh.";
+        loadingPopup.querySelector('.spinner').style.display = 'none';
+        
+        // **الإصلاح النهائي: تأكد من أن الأزرار لا تعمل عند فشل الاتصال**
+        isLoadingData = true; 
     }
 }
 
+// ... (updateLeaderboard, Status and Upgrade Logic remain the same) ...
 
 /** Loads all player net worths for the leaderboard */
 async function updateLeaderboard() {
-    // ... (Your existing leaderboard code using Firebase)
     const playersCol = collection(db, "players");
     const playerSnapshot = await getDocs(playersCol);
     
@@ -787,18 +839,6 @@ async function updateLeaderboard() {
     myNetWorthEl.textContent = playerNetWorth > 0 ? `${formatNumber(playerNetWorth)}$ (Rank ${playerRank})` : "N/A";
     statusRankEl.textContent = playerRank;
 }
-
-// 🛑 ================= Sync Function (New) ================= 🛑
-
-/** Updates UI (Balances/Timers) and saves data every second. */
-function syncData() {
-    renderItem();           // Update Balances/Prices on UI
-    updateSpinCooldown();   // Update Spin Timer
-    checkTimeElapsedAndStartTimer(); // Update Reward Timer
-    saveUserData();         // Save everything to Firestore
-}
-
-// ================= Account Status and Upgrade Logic (Unchanged) ================= 
 
 // Helper function to close any popup by ID
 function closePopup(popupEl) {
@@ -900,6 +940,7 @@ function updateUpgradeRequirements() {
 }
 
 function performUpgrade() {
+    if (isLoadingData) return; 
     const nextLevel = currentLevel + 1;
     if (nextLevel > 10) return;
 
@@ -923,8 +964,8 @@ function performUpgrade() {
         }
 
         updateStatusPopup();
-        renderItem(); 
-        saveUserData(); // Save after successful upgrade
+        updatePricesUI(); 
+        saveUserData(); 
         upgradeMsgEl.textContent = `Successfully upgraded to Level ${currentLevel}! 🎉`;
         upgradeMsgEl.style.color = '#00ffb3';
     } else {
@@ -938,15 +979,8 @@ function performUpgrade() {
 
 // 🛑 ================= Time Reward Logic (Unchanged) ================= 🛑
 
-function formatTime(seconds) {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
-}
-
 const REWARD_AMOUNT = 100000;
 const REWARD_INTERVAL = 300; 
-let rewardTimer;
 let rewardSeconds = REWARD_INTERVAL; 
 let isClaimReady = false; 
 
@@ -955,7 +989,6 @@ function updateRewardTimer() {
         rewardTimerDisplay.textContent = "READY TO CLAIM!";
         claimRewardBtn.disabled = false;
         claimRewardBtn.classList.add('ready-to-claim');
-        if (rewardTimer) clearInterval(rewardTimer);
         return;
     }
     
@@ -964,7 +997,6 @@ function updateRewardTimer() {
     if (rewardSeconds <= 0) {
         rewardSeconds = 0;
         isClaimReady = true;
-        // updateRewardTimer(); // Don't call recursively
         return;
     }
 
@@ -974,14 +1006,13 @@ function updateRewardTimer() {
 }
 
 function startRewardTimer(initialSeconds) {
-    // 🛑 No longer using an interval here, now part of syncData
     rewardSeconds = initialSeconds;
     isClaimReady = (rewardSeconds <= 0);
     updateRewardTimer(); 
 }
 
 function claimTimeReward() {
-    if (!isClaimReady) return; 
+    if (!isClaimReady || isLoadingData) return; 
 
     balance += REWARD_AMOUNT;
     
@@ -991,8 +1022,8 @@ function claimTimeReward() {
     isClaimReady = false; 
     
     startRewardTimer(REWARD_INTERVAL);
-    renderItem(); 
-    saveUserData(); // Save after claiming reward
+    updatePricesUI(); 
+    saveUserData(); 
 
     setTimeout(() => {
         closePopup(timeRewardPopup); 
@@ -1017,6 +1048,120 @@ function checkTimeElapsedAndStartTimer() {
     }
 }
 
+// 🛑 ================= MARKET SYNC & ABUSE TIMER LISTENER (NEW) ================= 🛑
+
+let marketSnapshotUnsubscribe = null; 
+let isMarketOwner = false; 
+
+async function startMarketSync() {
+    const marketRef = doc(db, "market", MARKET_DOC_ID);
+
+    // 1. Initial Market Check (for new game start)
+    try {
+        const marketSnap = await getDoc(marketRef);
+        if (!marketSnap.exists()) {
+            isMarketOwner = true; 
+            setInitialPrices(); 
+            
+            await setDoc(marketRef, {
+                prices: marketPrices,
+                isAbuseMode: false,
+                lastPriceUpdate: Date.now(), 
+                cycleStartTime: Date.now(), 
+                ownerID: currentUserID 
+            });
+        }
+    } catch (e) {
+        console.error("Initial Market Check failed: ", e);
+        // لا توقف اللعبة، بل اترك المستمع يحاول الاتصال
+    }
+
+
+    // 2. Setup Realtime Listener
+    marketSnapshotUnsubscribe = onSnapshot(marketRef, (doc) => {
+        if (doc.exists()) {
+            const data = doc.data();
+            
+            // 🛑 Update local market state 🛑
+            isAbuseMode = data.isAbuseMode || false;
+            marketPrices = data.prices || marketPrices;
+            marketLastUpdate = data.lastPriceUpdate || Date.now();
+            const cycleStartTime = data.cycleStartTime || Date.now();
+            const ownerID = data.ownerID;
+            
+            // Update UI based on new synced data
+            updatePricesUI();
+            updateMarketTimers(marketLastUpdate, isAbuseMode, cycleStartTime);
+            
+            // 3. Market Update Logic (Only one player acts as the "Owner" at a time)
+            
+            const now = Date.now();
+            const elapsedSinceUpdate = Math.floor((now - marketLastUpdate) / 1000);
+            
+            const updateInterval = isAbuseMode ? PRICE_UPDATE_INTERVAL_ABUSE : PRICE_UPDATE_INTERVAL_NORMAL;
+            const cycleDuration = isAbuseMode ? ABUSE_DURATION : NORMAL_DURATION;
+            const totalCycleTime = NORMAL_DURATION + ABUSE_DURATION;
+            
+            const elapsedSinceCycleStart = Math.floor((now - cycleStartTime) / 1000);
+            
+            // check if we are due for a mode change
+            const isDueForModeChange = isAbuseMode ? (elapsedSinceCycleStart >= (cycleDuration + NORMAL_DURATION)) : (elapsedSinceCycleStart >= cycleDuration);
+            
+            
+            // Determine Market Ownership
+            // Player becomes owner if they are the designated owner OR if the current owner is offline
+            isMarketOwner = (ownerID === currentUserID) || (elapsedSinceUpdate > (updateInterval * 3));
+            
+            if (!isLoadingData) {
+                
+                // A) Check for cycle change (Abuse <-> Normal)
+                if (isDueForModeChange) {
+                    if (isMarketOwner) {
+                         // Switch Mode
+                        const newMode = !isAbuseMode;
+                        const newCycleStartTime = now - (isAbuseMode ? NORMAL_DURATION : 0); // Reset or adjust start time
+                        
+                        // Force a price update immediately after mode switch
+                        const newPrices = calculateNewPrices();
+                        
+                        updateDoc(marketRef, {
+                            isAbuseMode: newMode,
+                            cycleStartTime: newCycleStartTime,
+                            prices: newPrices,
+                            lastPriceUpdate: now,
+                            ownerID: currentUserID // Claim ownership on cycle change
+                        });
+                        return; 
+                    }
+                }
+                
+                // B) Check for regular price update
+                const elapsedSinceLastPriceUpdate = Math.floor((now - marketLastUpdate) / 1000);
+                
+                if (elapsedSinceLastPriceUpdate >= updateInterval) {
+                     if (isMarketOwner) {
+                        const newPrices = calculateNewPrices();
+                        updateDoc(marketRef, { prices: newPrices, lastPriceUpdate: now });
+                    }
+                }
+            }
+
+        } else {
+             console.error("Market document does not exist! Re-initializing...");
+             // This can happen if the doc was deleted. Set owner to true to re-create it.
+             isMarketOwner = true;
+             setInitialPrices();
+             updateDoc(marketRef, {
+                prices: marketPrices,
+                isAbuseMode: false,
+                lastPriceUpdate: Date.now(), 
+                cycleStartTime: Date.now(), 
+                ownerID: currentUserID 
+            });
+        }
+    });
+}
+
 
 // ================= Event Binding (Unchanged) =================
 
@@ -1028,17 +1173,19 @@ document.getElementById('closeSpinPopup').addEventListener('click', () => closeP
 
 
 statusBtn.addEventListener("click", () => {
+    if (isLoadingData) return;
     updateStatusPopup(); 
     statusPopup.style.display = "flex";
 });
 
 leaderboardBtn.addEventListener("click", () => {
+    if (isLoadingData) return;
     updateLeaderboard(); 
     leaderboardPopup.style.display = "flex";
 });
 
 timeRewardBtn.addEventListener("click", () => {
-    // 🛑 We no longer call checkTimeElapsedAndStartTimer() here, as it runs every second in syncData.
+    if (isLoadingData) return;
     timeRewardPopup.style.display = "flex";
 });
 
@@ -1047,19 +1194,25 @@ claimRewardBtn.addEventListener("click", claimTimeReward);
 upgradeBtn.addEventListener("click", performUpgrade);
 
 
-// 🛑 ================= Startup and Authentication (Custom Token Flow) ================= 🛑
+// 🛑 ================= Startup and Authentication (Custom Token Flow - MODIFIED) ================= 🛑
 
-function startGame(token, pName) {
+async function startGame(token, pName) {
     currentUserID = token;
     playerName = pName;
     
-    setInitialPrices(); 
-    startAbuseCycle(); 
-    loadUserData(); 
+    // 1. Start Market Sync FIRST, as it sets initial prices
+    await startMarketSync(); 
     
-    // 🛑 Start 1-second sync engine 
+    // 2. Load player data
+    await loadUserData(); 
+    
+    // 3. Start 1-second sync engine
     if (syncEngine) clearInterval(syncEngine);
-    syncEngine = setInterval(syncData, 1000); 
+    const syncEngine = setInterval(() => {
+        saveUserData();
+        updateSpinCooldown();
+        checkTimeElapsedAndStartTimer();
+    }, 1000); 
 }
 
 /** Check if the player came from the login page using tempToken, or if they need to be redirected to login. */
@@ -1068,6 +1221,7 @@ function initialSetup() {
     const savedToken = localStorage.getItem('gameToken'); 
     const tempName = localStorage.getItem('tempPlayerName');
     
+    // Check if player came from login (always prioritize tempToken)
     if (tempToken) {
         const finalName = tempName || `Trader ${tempToken}`;
         
@@ -1077,11 +1231,13 @@ function initialSetup() {
         startGame(tempToken, finalName);
     } 
     
+    // Check if player has a saved token but didn't come from login (i.e. directly opened index.html)
     else if (savedToken) {
-        // 🛑 Still redirecting to login to prevent auto-login, forcing user to use the token
+        // Redirect to login.html to force re-authentication (using saved token)
         window.location.replace('login.html');
     }
     
+    // No token found, redirect to login
     else {
         window.location.replace('login.html');
     }
