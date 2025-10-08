@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Login - Mini Trading App</title>
+<link rel="stylesheet" href="style.css" type="text/css" media="all" />
+<style>
+/* تنسيقات إضافية لصفحة تسجيل الدخول/التوكن (لم يتم تغييرها) */
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 0;
+    flex-direction: column;
+}
+
+.login-container {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(8px);
+    border: 2px solid #66c2ff;
+    border-radius: 12px;
+    box-shadow: 0 0 40px rgba(102, 194, 255, 0.8);
+    text-align: center;
+    padding: 40px 30px; 
+    width: 90%; 
+    max-width: 400px;
+    position: relative;
+    overflow: hidden;
+}
+
+.login-container h1 {
+    color: #00ffb3; 
+    text-shadow: 0 0 10px rgba(0, 255, 179, 0.8);
+    margin-bottom: 25px;
+    font-size: 32px;
+}
+
+.login-option-btn {
+    width: 100%;
+    padding: 15px;
+    margin-bottom: 15px;
+    font-size: 18px;
+    font-weight: 700;
+    background: #161b22; 
+    border: 1px solid #66c2ff;
+    color: #66c2ff; 
+    transition: all 0.3s ease;
+    box-shadow: 0 0 10px rgba(102, 194, 255, 0.3);
+}
+
+.login-option-btn.active {
+    background: #66c2ff;
+    color: #0d1117;
+    box-shadow: 0 0 15px rgba(102, 194, 255, 0.8);
+}
+
+.form-box {
+    margin-top: 15px;
+    overflow: hidden;
+    max-height: 0;
+    opacity: 0;
+    transition: max-height 0.5s ease-in-out, opacity 0.4s ease-in;
+}
+
+.form-box.open {
+    max-height: 200px; 
+    opacity: 1;
+    margin-bottom: 15px;
+}
+
+.form-box input {
+    width: 100%; 
+    margin-bottom: 15px; 
+    padding: 14px; 
+    border-radius: 8px;
+    border: 1px solid #30363d; 
+    background: #0d1117;
+    color: #00ffb3; 
+    text-align: center;
+    font-size: 18px;
+}
+
+#confirmTokenBtn, #confirmNameBtn {
+    width: 100%;
+    background: #00ffb3;
+    color: #0d1117;
+    font-weight: 800;
+    font-size: 18px;
+    padding: 14px;
+    box-shadow: 0 0 15px rgba(0, 255, 179, 0.6);
+}
+
+/* رسالة التوكن */
+.token-message {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #161b22;
+    border: 2px solid #ffcc00;
+    border-radius: 12px;
+    padding: 30px;
+    box-shadow: 0 0 30px rgba(255, 204, 0, 0.8);
+    z-index: 1000;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.token-message h2 {
+    color: #ffcc00;
+    margin-bottom: 15px;
+    font-size: 28px;
+}
+.token-message p {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 20px;
+}
+#displayedToken {
+    color: #00ffb3;
+    font-size: 36px;
+    font-weight: 900;
+    margin: 10px 0;
+    text-shadow: 0 0 10px rgba(0, 255, 179, 0.8);
+}
+#startPlayingBtn {
+    background: #66c2ff;
+    color: #0d1117;
+    font-weight: 900;
+    font-size: 20px;
+    padding: 12px 30px;
+}
+
+.error-msg {
+    color: #ff5050;
+    font-size: 14px;
+    margin-top: -10px;
+    margin-bottom: 10px;
+    height: 15px;
+    font-weight: 600;
+}
+</style>
+</head>
+<body>
+
+<div class="login-container">
+    <h1>Welcome Trader 💰</h1>
+    
+    <button class="login-option-btn" id="createTokenBtn">
+        ✨ Create a New Token
+    </button>
+
+    <div class="form-box" id="createFormBox">
+        <input type="text" id="nameInput" placeholder="Enter your name" maxlength="15" />
+        <p class="error-msg" id="nameErrorMsg"></p>
+        <button id="confirmNameBtn">Confirm</button>
+    </div>
+    
+    <button class="login-option-btn" id="haveTokenBtn">
+        🔑 Already Have a Token
+    </button>
+
+    <div class="form-box" id="tokenFormBox">
+        <input type="number" id="tokenInput" placeholder="Enter your 3-digit Token" min="100" max="999" />
+        <p class="error-msg" id="tokenErrorMsg"></p>
+        <button id="confirmTokenBtn">Confirm</button>
+    </div>
+
+</div>
+
+<div class="token-message" id="tokenMessagePopup">
+    <h2>Token Created!</h2>
+    <p>Your unique token is:</p>
+    <div id="displayedToken">000</div>
+    <p style="font-size: 14px; color: #f0f6fc; margin-top: 10px;">Please **remember this token** to log in later.</p>
+    <button id="startPlayingBtn">Start Playing!</button>
+</div>
+
+<script type="module">
+    // 🛑 يتم استيراد Firebase بدون منطق احتياطي 
+    import { db, doc, getDoc } from './firebase-config.js';
+    
+    document.addEventListener('DOMContentLoaded', () => {
+
+        const createTokenBtn = document.getElementById('createTokenBtn');
+        const haveTokenBtn = document.getElementById('haveTokenBtn');
+        const createFormBox = document.getElementById('createFormBox');
+        const tokenFormBox = document.getElementById('tokenFormBox');
+        
+        const nameInput = document.getElementById('nameInput');
+        const confirmNameBtn = document.getElementById('confirmNameBtn');
+        const nameErrorMsg = document.getElementById('nameErrorMsg');
+        
+        const tokenInput = document.getElementById('tokenInput');
+        const confirmTokenBtn = document.getElementById('confirmTokenBtn');
+        const tokenErrorMsg = document.getElementById('tokenErrorMsg');
+
+        const tokenMessagePopup = document.getElementById('tokenMessagePopup');
+        const displayedToken = document.getElementById('displayedToken');
+        const startPlayingBtn = document.getElementById('startPlayingBtn');
+
+        // State
+        let currentMode = null;
+        let newlyCreatedToken = null; 
+
+        // Toggle function with animation
+        function toggleForm(mode) {
+            if (currentMode === mode) {
+                createFormBox.classList.remove('open');
+                tokenFormBox.classList.remove('open');
+                createTokenBtn.classList.remove('active');
+                haveTokenBtn.classList.remove('active');
+                currentMode = null;
+                nameErrorMsg.textContent = '';
+                tokenErrorMsg.textContent = '';
+                return;
+            }
+
+            currentMode = mode;
+            nameErrorMsg.textContent = '';
+            tokenErrorMsg.textContent = '';
+
+            if (mode === 'create') {
+                createTokenBtn.classList.add('active');
+                haveTokenBtn.classList.remove('active');
+                tokenFormBox.classList.remove('open');
+                setTimeout(() => {
+                    createFormBox.classList.add('open');
+                    nameInput.focus();
+                }, 50);
+            } else if (mode === 'have') {
+                haveTokenBtn.classList.add('active');
+                createTokenBtn.classList.remove('active');
+                createFormBox.classList.remove('open');
+                setTimeout(() => {
+                    tokenFormBox.classList.add('open');
+                    tokenInput.focus();
+                }, 50);
+            }
+        }
+
+        createTokenBtn.addEventListener('click', () => toggleForm('create'));
+        haveTokenBtn.addEventListener('click', () => toggleForm('have'));
+
+        // --- Create Token Logic (الآن يعتمد على Firebase) ---
+        confirmNameBtn.addEventListener('click', async () => {
+            const playerName = nameInput.value.trim();
+            nameErrorMsg.textContent = '';
+            
+            if (playerName === "") {
+                nameErrorMsg.textContent = 'Name is required to create a token!';
+                return;
+            }
+            
+            confirmNameBtn.disabled = true;
+            confirmNameBtn.textContent = 'Generating...';
+
+            try {
+                // توليد توكن عشوائي والتحقق من أنه غير مستخدم في Firebase
+                let newToken;
+                let docSnap;
+                
+                do {
+                    newToken = Math.floor(Math.random() * 900) + 100; // 3 أرقام
+                    const docRef = doc(db, "players", String(newToken));
+                    docSnap = await getDoc(docRef);
+                } while (docSnap.exists()); 
+                
+                newlyCreatedToken = String(newToken);
+
+                // حفظ الاسم والتوكن الجديد بشكل مؤقت للانتقال لـ main.js
+                localStorage.setItem('tempPlayerName', playerName);
+                localStorage.setItem('tempToken', newlyCreatedToken);
+                
+                // عرض رسالة التوكن
+                displayedToken.textContent = newlyCreatedToken;
+                tokenMessagePopup.style.display = 'flex';
+                
+            } catch (e) {
+                nameErrorMsg.textContent = 'Error connecting to Firebase or during token creation. Check console.';
+                console.error("Error creating token: ", e);
+            } finally {
+                 confirmNameBtn.disabled = false;
+                 confirmNameBtn.textContent = 'Confirm';
+            }
+        });
+        
+        startPlayingBtn.addEventListener('click', () => {
+            if (newlyCreatedToken) {
+                // حفظ التوكن بشكل دائم (سواء كان جديداً أو تمت إزالته من قبل)
+                localStorage.setItem('gameToken', newlyCreatedToken); 
+            }
+            window.location.href = 'index.html';
+        });
+
+
+        // --- Already Have Token Logic (الآن يعتمد على Firebase) ---
+        confirmTokenBtn.addEventListener('click', async () => {
+            const token = tokenInput.value.trim();
+            tokenErrorMsg.textContent = ''; 
+            
+            if (token.length !== 3 || isNaN(parseInt(token))) {
+                tokenErrorMsg.textContent = 'Please enter a valid 3-digit Token.';
+                return;
+            }
+
+            confirmTokenBtn.disabled = true;
+            confirmTokenBtn.textContent = 'Checking...';
+
+            try {
+                const docRef = doc(db, "players", token);
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists()) {
+                    const playerData = docSnap.data();
+                    
+                    // حفظ التوكن بشكل دائم
+                    localStorage.setItem('gameToken', token);
+                    
+                    // حفظ البيانات المؤقتة للتحويل إلى main.js
+                    localStorage.setItem('tempToken', token);
+                    localStorage.setItem('tempPlayerName', playerData.playerName || `Trader ${token}`);
+                    
+                    window.location.href = 'index.html';
+                
+                } else {
+                    // إذا لم تجد Firebase التوكن
+                    tokenErrorMsg.textContent = `❌ Token ${token} not found. Please try again or create a new token.`;
+                }
+
+
+            } catch (e) {
+                // رسالة خطأ عند فشل الاتصال بالخادم
+                tokenErrorMsg.textContent = 'Error connecting to Firebase. Please check your config.';
+                console.error("Error during token check: ", e);
+            } finally {
+                confirmTokenBtn.disabled = false;
+                confirmTokenBtn.textContent = 'Confirm';
+            }
+        });
+    });
+</script>
+
+</body>
+</html>
