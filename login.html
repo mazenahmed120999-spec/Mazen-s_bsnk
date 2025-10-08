@@ -180,15 +180,20 @@ body {
     <button id="startPlayingBtn">Start Playing!</button>
 </div>
 
-<script type="module">
+<script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.1.0/firebase-firestore.js"></script>
+
+<script defer>
+    
     // 🛑 ========================================================== 🛑
     // 🛑 ============== FIREBASE CONFIGURATION (MERGED) ============= 🛑
     // 🛑 ========================================================== 🛑
-
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.1.0/firebase-app.js";
-    import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.1.0/firebase-firestore.js";
     
-    // مفاتيح مشروعك الخاصة (باستخدام المفاتيح التي أرسلتها سابقاً)
+    // تأكد من أن هذه الدوال متوفرة على مستوى النافذة (Window)
+    const { initializeApp } = firebase;
+    const { getFirestore, doc, getDoc } = firebase.firestore;
+    
+    // مفاتيح مشروعك الخاصة
     const firebaseConfig = {
       apiKey: "AIzaSyD-g_PM12TgelGQn7npmYybpGfSxTuwpi0",
       authDomain: "center-9ab44.firebaseapp.com",
@@ -267,7 +272,7 @@ body {
         createTokenBtn.addEventListener('click', () => toggleForm('create'));
         haveTokenBtn.addEventListener('click', () => toggleForm('have'));
 
-        // --- Create Token Logic (الآن يعتمد على Firebase) ---
+        // --- Create Token Logic ---
         confirmNameBtn.addEventListener('click', async () => {
             const playerName = nameInput.value.trim();
             nameErrorMsg.textContent = '';
@@ -312,14 +317,14 @@ body {
         
         startPlayingBtn.addEventListener('click', () => {
             if (newlyCreatedToken) {
-                // حفظ التوكن بشكل دائم (سواء كان جديداً أو تمت إزالته من قبل)
+                // حفظ التوكن بشكل دائم 
                 localStorage.setItem('gameToken', newlyCreatedToken); 
             }
             window.location.href = 'index.html';
         });
 
 
-        // --- Already Have Token Logic (الآن يعتمد على Firebase) ---
+        // --- Already Have Token Logic ---
         confirmTokenBtn.addEventListener('click', async () => {
             const token = tokenInput.value.trim();
             tokenErrorMsg.textContent = ''; 
